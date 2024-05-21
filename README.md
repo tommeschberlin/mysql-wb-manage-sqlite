@@ -12,12 +12,14 @@ a) in your userprofile
 
 1. Open MySQL Workbench
 2. Choose "Install Plugin/Module..." in "Scripting" menu
-3. Open `manage_sqlite_grt.py` file
-4. Restart MySQL Workbench
+3. Open **`manage_sqlite_grt.py`** file
+4. Copy **`SQLiteDbUpdater.py`** to "User Module File Location" too, see [here](https://dev.mysql.com/doc/workbench/en/wb-modules.html)
+5. Restart MySQL Workbench
 
 b) gobal
 
-Copy the ```manage_sqlite_grt.py``` file into the MySQL Workbench directory (usually in ```c:\Programs```) into its ```modules``` directory.
+1. Copy the files **`manage_sqlite_grt.py`** and **`SQLiteDbUpdater.py`** into the MySQL Workbench directory (usually in **`c:\Programs`**) into its **`modules`** directory.
+5. Start MySQL Workbench
 
 ## Usage
 

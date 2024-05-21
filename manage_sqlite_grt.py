@@ -16,11 +16,16 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+# can be imported by user via Scripting->Install Plugin/Module or globally installed in modules directory
+# have to copy the SQLiteDbUpdater.py file to the same directory
+
+import os
 import re
 from io import StringIO
 
 import grt
 import mforms
+import SQLiteDbUpdater
 
 from wb import DefineModule, wbinputs
 from workbench.ui import WizardForm, WizardPage
@@ -31,7 +36,7 @@ ModuleInfo = DefineModule(name='ExportSQLite',
                           version='0.1.0')
 
 @ModuleInfo.plugin('wb.util.exportSQLite',
-                   caption='Export SQLite CREATE script',
+                   caption='Manage SQLite',
                    input=[wbinputs.currentCatalog()],
                    groups=['Catalog/Utilities', 'Menu/Catalog'])
 @ModuleInfo.export(grt.INT, grt.classes.db_Catalog)
@@ -492,6 +497,12 @@ class ExportSQLiteWizard_PreviewPage(WizardPage):
         self.copy_button.set_tooltip('Copy the text to the clipboard.')
         self.copy_button.add_clicked_callback(self.copy_clicked)
 
+        self.create_db_button = mforms.newButton()
+        self.create_db_button.enable_internal_padding(True)
+        self.create_db_button.set_text('Create/Update SQLite Database...')
+        self.create_db_button.set_tooltip('Create/Update SQLite Database from SQL statements.')
+        self.create_db_button.add_clicked_callback(self.create_db_clicked)
+
         self.sql_text = mforms.newCodeEditor()
         self.sql_text.set_language(mforms.LanguageMySQL)
         self.sql_text.set_text(sql_text)
@@ -505,6 +516,7 @@ class ExportSQLiteWizard_PreviewPage(WizardPage):
 
         button_box.add(self.save_button, False, True)
         button_box.add(self.copy_button, False, True)
+        button_box.add(self.create_db_button, False, True)
 
         self.content.add_end(button_box, False, False)
         self.content.add_end(self.sql_text, True, True)
@@ -522,10 +534,34 @@ class ExportSQLiteWizard_PreviewPage(WizardPage):
                 mforms.Utilities.show_error(
                     'Save to File',
                     'Could not save to file "%s": %s' % (path, str(e)),
-                    'OK')
+                    'OK','','')
 
     def copy_clicked(self):
         mforms.Utilities.set_clipboard_text(self.sql_text.get_text(False))
+
+    def create_db_clicked(self):
+        modelName = ''
+        for schema in [(s, s.name == 'main') for s in grt.root.wb.doc.physicalModels[0].catalog.schemata]:
+            modelName = schema[0].name
+
+        file_chooser = mforms.newFileChooser(self.main, mforms.SaveFile)
+        file_chooser.set_extensions('SQLite DB Files (*.sqlite)|*.sqlite', 'sqlite')
+        file_chooser.set_path(modelName)
+
+        if file_chooser.run_modal() != mforms.ResultOk:
+            return
+        
+        path = file_chooser.get_path()
+        sql = self.sql_text.get_text(False)
+        try:
+            upater = SQLiteDbUpdater.SQLiteDbUpdater( path, sql )
+            upater.enableLogging()
+            upater.update()
+        except Exception as e:
+            mforms.Utilities.show_error(
+                'Create/Update SQLite database',
+                'Could not write to database "%s": %s' % (path, str(e)),
+                'OK','','')
 
 class ExportSQLiteWizard(WizardForm):
     def __init__(self, sql_text):
@@ -536,3 +572,7 @@ class ExportSQLiteWizard(WizardForm):
 
         self.preview_page = ExportSQLiteWizard_PreviewPage(self, sql_text)
         self.add_page(self.preview_page)
+
+# Uncomment this, if you want to test/run/debug at MySQL Workbench -> Scripting
+# at least one model should exist
+# exportSQLite(grt.root.wb.doc.physicalModels[0].catalog)
