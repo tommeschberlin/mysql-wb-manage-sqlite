@@ -55,3 +55,4 @@ docs/_build/
 
 # PyBuilder
 target/
+mysql-wb-manage-sqlite.code-workspace
