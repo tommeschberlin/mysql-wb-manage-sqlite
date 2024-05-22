@@ -28,7 +28,7 @@ Once you open a database model in MySQL Workbench, you can see "Manage SQLite da
 
 ## Some comments to data preserving
 
-The **SQLiteDbUpdater** tries to keep your existing table data, but SQLite can not alter tables with forgeign keys. So currently it creates a sql-dump, deletes the existing db and restores it using the sql-dump after creating the new db. Restoring follows this strategies:  
+The **SQLiteDbUpdater** tries to keep your existing table data, but SQLite can not alter tables with forgeign keys. So currently it creates the new db with a temporarily choosen name, creates a sql-dump from the old db, restores it into the new created db. After successful restoring **and only then**, the old db will be deleted and the new db will be renamed. Restoring follows this strategies:
 1) **Copy complete rows**  
    Works fine for all unchanged tables of your database
 2) **Copy rows column by column matching their names**  
@@ -37,6 +37,7 @@ The **SQLiteDbUpdater** tries to keep your existing table data, but SQLite can n
   Tries to guess renamed columns by their type/position footprint in the column order. This works safe if you change only one column name per db-update. Not changing order and type will also work perfect.
 
 ## Restrictions / Problems
+
 1) the SQLite ODBC driver causes problems at import to ms-access if tables contain indicees for foreign keys, so indexes are leaved out from database creation
 2) Creation of SQL code works not for **`TIMESTAMP UPDATE`**, therefore do not use auto updating timstamps for now
 3) If changing of a column type leads to a more restricive type, you should alter your data before changing the type
