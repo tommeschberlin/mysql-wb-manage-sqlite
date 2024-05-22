@@ -109,16 +109,24 @@ class SQLiteDbUpdater:
                 conn.close()
 
     # replace the dbname with the choosen filename stem                
-    def substituteDbNameInSql(self):
+    def substituteDbNameInSql(self, sql):
         pattern = r"ATTACH \"([^ \"]+)\" AS \"([^ \";]+)\""
-        match = re.search(pattern, self.createDbSql)
+        match = re.search(pattern, sql)
         if not match:
             raise ExportSQLiteError( 'Error', 'Cant evaluate/replace ATTACH ... line!')
         prevDbName = match.group(2)
-        sql = re.sub(pattern, "ATTACH \"%s\" AS \"%s\"" %(self.dbTmpFileName,self.dbName), self.createDbSql)
+        sql = re.sub(pattern, "ATTACH \"%s\" AS \"%s\"" %(self.dbTmpFileName,self.dbName), sql)
         sql = re.sub( "\"" +  prevDbName + "\"\\.", "\"" + self.dbName + "\".", sql)
         return sql
 
+    def commentIndexInSql(self, sql):
+        pattern = r"\n(CREATE INDEX[^\n]*)"
+        match = re.search(pattern, sql)
+        if not match:
+            return
+        sql = re.sub(pattern, "\n-- %s" % match.group(1), sql)
+        return sql
+    
     # stores sql creation script for inspection purposes, create backup of an already existing one
     def storeSql(sql, sqlFileName):
         sqlTmpFileName = sqlFileName + "~"
@@ -179,7 +187,8 @@ class SQLiteDbUpdater:
         os.chdir( self.workDir )
 
         # set choosen filename stem as db name in sql definition
-        sql = self.substituteDbNameInSql()
+        sql = self.substituteDbNameInSql( self.createDbSql )
+        sql = self.commentIndexInSql( sql )
         SQLiteDbUpdater.storeSql( sql, self.dbDefinitionFileName)
 
         # create db in dbTmpFileName
