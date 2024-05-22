@@ -33,7 +33,8 @@ The **SQLiteDbUpdater** tries to keep your existing table data, but SQLite can n
    Works fine for all unchanged tables of your database
 2) **Copy rows column by column matching their names**  
    Matches the column names of changed tables and puts the data in. Thus you can alter table defintions by adding or removing table columns.
-2) **Copy rows column by column matching their name or footprint**  (concept is clear, planned to come in the near future)
+   
+2) **$`\textcolor{gray}{\text{Copy rows column by column matching their name or footprint}}`$**  (concept is clear, planned to come in the near future)
   Tries to guess renamed columns by their type/position footprint in the column order. This works safe if you change only one column name per db-update. Not changing order and type will also work perfect.
 
 ## Restrictions / Problems
