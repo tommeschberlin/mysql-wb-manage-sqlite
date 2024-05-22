@@ -2,7 +2,7 @@
 
 ManageSQLite is an extension for
 [MySQL Workbench](http://www.mysql.com/products/workbench/) to export a schema
-catalog as SQLite's CREATE SQL queries and/or create/update a SQLite databases.
+catalog as SQLite's CREATE SQL queries and/or create/update SQLite databases.
 Based on [MySQL Workbench ExportSQLite Plugin](https://github.com/ssstain/mysql-wb-exportsqlite) for using with
 MySQL Workbench 8.0 or above.
 
