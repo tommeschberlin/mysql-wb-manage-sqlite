@@ -32,7 +32,7 @@ class SQLiteDbUpdater:
 
     def getTableInfo(cursor, tableName):
         tableInfo = {}
-        cursor.execute( "PRAGMA table_info(%s);" % tableName )
+        cursor.execute( "PRAGMA table_info(\"%s\");" % tableName )
         return cursor.fetchall()
         
     # create database info to decide later howto dump/restore data
@@ -44,7 +44,7 @@ class SQLiteDbUpdater:
             cur.execute( "select name from sqlite_master where type='table'" )
             tableNames = cur.fetchall()
             for (tableName,) in tableNames:
-                cur.execute( "select * from %s" % tableName )
+                cur.execute( "select * from \"%s\"" % tableName )
                 rows = cur.fetchall()
                 dbTableInfo[tableName] = { 'columns': SQLiteDbUpdater.getTableInfo(cur, tableName), 'containsData' : len(rows) > 0 }
         finally:
