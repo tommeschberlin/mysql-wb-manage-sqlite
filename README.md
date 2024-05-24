@@ -28,13 +28,12 @@ Once you open a database model in MySQL Workbench, you can see "Manage SQLite da
 
 ## Some comments to data preserving
 
-The **SQLiteDbUpdater** tries to keep your existing table data, but SQLite can not alter tables with forgeign keys. So currently it creates the new db with a temporarily choosen name, creates a sql-dump from the old db, restores it into the new created db. After successful restoring **and only then**, the old db will be deleted and the new db will be renamed. Restoring follows this strategies:
+The **SQLiteDbUpdater** tries to keep your existing table data, but SQLite can not alter tables with foreign keys. So currently it creates the new db with a temporarily choosen name, creates a sql-dump from the old db, restores it into the new created db. After successful restoring **and only then**, the old db will be deleted and the new db will be renamed. Restoring follows this strategies:
 1) **Copy complete rows**  
    Works fine for all unchanged tables of your database
 2) **Copy rows column by column matching their names**  
    Matches the column names of changed tables and puts the data in. Thus you can alter table defintions by adding or removing table columns.
-   
-2) **$`\textcolor{gray}{\text{Copy rows column by column matching their name or footprint}}`$**  (concept is clear, planned to come in the near future)
+2) **Copy rows column by column matching their name or footprint**  (concept is clear, planned to come in the near future)
   Tries to guess renamed columns by their type/position footprint in the column order. This works safe if you change only one column name per db-update. Not changing order and type will also work perfect.
 
 ## Restrictions / Problems
