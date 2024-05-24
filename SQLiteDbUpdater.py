@@ -59,12 +59,12 @@ class SQLiteDbUpdater:
                 return True
         return False
 
-    def dumpTableByRow(tableRows, newTableName, file):
+    def restoreTableByRow(tableRows, newTableName, file):
         for row in tableRows:
             sqlLine = 'INSERT INTO "%s" VALUES%s;' % (newTableName, row)
             file.write('%s\n' % sqlLine)
 
-    def dumpTableByRowCol(tableRows, oldTableInfo, newTableName, newTableInfo, file):
+    def restoreTableByRowCol(tableRows, oldTableInfo, newTableName, newTableInfo, file):
         for row in tableRows:
             sqlColumnNames = []
             sqlColumnValues = []
@@ -146,8 +146,8 @@ class SQLiteDbUpdater:
                 return newTableName
         return None
     
-    def evaluateDumpStrategy(self, oldDbTableInfo, newDbTableInfo):
-        dumpStrategy = {}
+    def evaluateRestoreStrategy(self, oldDbTableInfo, newDbTableInfo):
+        restoreStrategy = {}
         for tableName, oldTableInfo in oldDbTableInfo.items():
             if not oldDbTableInfo[tableName]['containsData']:
                 continue
@@ -169,17 +169,17 @@ class SQLiteDbUpdater:
 
             strategy = ""
             if len(oldTableInfo['columns']) == len(newTableInfo['columns']):
-                dumpStrategy[tableName] = lambda tableRows, file, nameOfNewTable=newTableName : \
-                    SQLiteDbUpdater.dumpTableByRow(tableRows, nameOfNewTable, file )
+                restoreStrategy[tableName] = lambda tableRows, file, nameOfNewTable=newTableName : \
+                    SQLiteDbUpdater.restoreTableByRow(tableRows, nameOfNewTable, file )
                 strategy = "ByRow"
             else:
-                dumpStrategy[tableName] = lambda tableRows, file, nameOfNewTable=newTableName : \
-                    SQLiteDbUpdater.dumpTableByRowCol( tableRows, oldTableInfo, nameOfNewTable, newTableInfo, file )
+                restoreStrategy[tableName] = lambda tableRows, file, nameOfNewTable=newTableName : \
+                    SQLiteDbUpdater.restoreTableByRowCol( tableRows, oldTableInfo, nameOfNewTable, newTableInfo, file )
                 strategy = "ByRowCol"
 
             self.log( "Dump/Restore table \"%s\" by strategy: %s" % ( tableName, strategy ))
 
-        return dumpStrategy
+        return restoreStrategy
 
     # udpdate/create database in a most secure way
     # all updates changes will be made in a temporary created db
@@ -210,8 +210,8 @@ class SQLiteDbUpdater:
             oldDbTableInfo = SQLiteDbUpdater.getDbTableInfo( self.dbFileName )
             if SQLiteDbUpdater.containsData(oldDbTableInfo):
                 newDbTableInfo = SQLiteDbUpdater.getDbTableInfo( self.dbTmpFileName )
-                dumpStrategy = self.evaluateDumpStrategy(oldDbTableInfo, newDbTableInfo)
-                SQLiteDbUpdater.dumpData(self.dbFileName, self.dbRestoreFileName, dumpStrategy)
+                restoreStrategy = self.evaluateRestoreStrategy(oldDbTableInfo, newDbTableInfo)
+                SQLiteDbUpdater.dumpData(self.dbFileName, self.dbRestoreFileName, restoreStrategy)
                 SQLiteDbUpdater.restoreData(self.dbTmpFileName, self.dbRestoreFileName)
 
         # on success replace dbFileName by dbTmpFileName
@@ -220,17 +220,3 @@ class SQLiteDbUpdater:
         os.rename( self.dbTmpFileName, self.dbFileName  )
 
         self.log('Update finished')
-
-# test
-if __name__ == '__main__':
-    # load sql data
-    dirName = os.path.dirname( __file__ )
-    sql = ""
-    sqlPath = dirName + "/test.sql"
-    with open(sqlPath, 'rt') as f:
-        sql = f.read()
-
-    path = dirName + "/test.sqlite"
-    upater = SQLiteDbUpdater(path, sql )
-    upater.enableLogging()
-    upater.update()
