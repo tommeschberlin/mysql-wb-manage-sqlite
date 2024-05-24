@@ -140,8 +140,10 @@ class SQLiteDbUpdater:
         with open(sqlFileName, 'w') as f:
             f.write(sql)
 
-    def findTableByFingerprint(tableInfo, dbTableInfo):
-        #for tableName, oldTableInfo in oldDbTableInfo.items():
+    def findTableByFingerprint(tableInfo, newDbTableInfo):
+        for newTableName, newTableInfo in newDbTableInfo.items():
+            if newTableInfo == tableInfo:
+                return newTableName
         return None
     
     def evaluateDumpStrategy(self, oldDbTableInfo, newDbTableInfo):
