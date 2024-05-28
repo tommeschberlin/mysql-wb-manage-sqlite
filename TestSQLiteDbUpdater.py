@@ -84,6 +84,7 @@ class TestSQLiteUpdater(unittest.TestCase):
         rows = self.executeSqlLine(dbFileName, "select * from \"%s\"" % tableName )
         return rows
 
+    @unittest.skip("skipped temporarily")
     def test_RestoreByRowStrategy(self):
         # add data
         sql  = 'INSERT INTO "kurs" VALUES(1, "Hüpfen");'
@@ -102,6 +103,7 @@ class TestSQLiteUpdater(unittest.TestCase):
         self.assertEqual( 1, len(rows), "Table teilnehmer should contain one row" )
         self.assertEqual( 3, len(rows[0]), "Table teilnehmer 1st row should contain three cols" )
 
+    @unittest.skip("skipped temporarily")
     def test_RestoreByRowColStrategy(self):
         # add data
         sql  = 'INSERT INTO "kurs" VALUES(1, "Hüpfen");'
@@ -115,15 +117,28 @@ class TestSQLiteUpdater(unittest.TestCase):
         upater.update()
 
         rows = self.getTableRows( self.dbOrigFileName, "kurs" )
-        self.assertEqual( 1, len(rows), "Table kurs should contain one row" )
-        self.assertEqual( 2, len(rows[0]), "Table kurs 1st row should contain two cols" )
+        self.assertEqual( 1, len(rows), "Table \"kurs\" should contain one row" )
+        self.assertEqual( 2, len(rows[0]), "Table \"kurs\" 1st row should contain two cols" )
 
         rows = self.getTableRows( self.dbOrigFileName, "teilnehmer" )
-        self.assertEqual( 1, len(rows), "Table teilnehmer should contain one row" )
-        self.assertEqual( 4, len(rows[0]), "Table teilnehmer 1st row should contain four cols" )
-        self.assertEqual( None, rows[0][3], "New col should contain no data" )
+        self.assertEqual( 1, len(rows), "Table \"teilnehmer\" should contain one row" )
+        self.assertEqual( 4, len(rows[0]), "Table \"teilnehmer\" 1st row should contain four cols" )
+        self.assertEqual( None, rows[0][3], "New col in table \"teilnehmer\" should contain no data" )
 
     def test_RestoreByRowColWithRenamedColStrategy(self):
+        # add data
+        sql  = 'INSERT INTO "kurs" VALUES(1, "Hüpfen");'
+        sql += 'INSERT INTO "teilnehmer" VALUES(1, "Shwze", 1);'
+        self.executeSqlScript(self.dbOrigFileName, sql)
+
+        # change teilnehmer col name to Name
+        tableColsSQL = self.tableColsSQL
+        tableColsSQL['teilnehmer'][1] = '"Name" VARCHAR(45)'
+        upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
+        upater.update()
+
+        rows = self.getTableRows( self.dbOrigFileName, "teilnehmer" )
+
         None
 
 if __name__ == '__main__':

@@ -31,10 +31,17 @@ class SQLiteDbUpdater:
         logging.basicConfig(filename=self.logFile, filemode='wt', level=logging.DEBUG, format='%(asctime)s %(levelname)s %(message)s', datefmt='%H:%M:%S')
 
     def getTableInfo(cursor, tableName):
-        tableInfo = {}
+        tableInfoByColName = {}
+        tableInfoByColIdx = {}
         cursor.execute( "PRAGMA table_info(\"%s\");" % tableName )
-        return cursor.fetchall()
-        
+        info = cursor.fetchall()
+        for idx,col in enumerate(info):
+            info = { 'cid': col[0], 'name': col[1], 'type': col[2], 'notnull': col[3], 'dflt_value': col[4], 'pk': col[5] }
+            tableInfoByColIdx[idx] = info
+            tableInfoByColName[col[1]] = info
+
+        return tableInfoByColIdx, tableInfoByColName
+            
     # create database info to decide later howto dump/restore data
     def getDbTableInfo(dbFileName):
         dbTableInfo = {}
@@ -46,7 +53,8 @@ class SQLiteDbUpdater:
             for (tableName,) in tableNames:
                 cur.execute( "select * from \"%s\"" % tableName )
                 rows = cur.fetchall()
-                dbTableInfo[tableName] = { 'columns': SQLiteDbUpdater.getTableInfo(cur, tableName), 'containsData' : len(rows) > 0 }
+                infoByColIdx, infoByColName = SQLiteDbUpdater.getTableInfo(cur, tableName)
+                dbTableInfo[tableName] = { 'byIdx': infoByColIdx, 'byName': infoByColName, 'containsData' : len(rows) > 0 }
         finally:
             conn.close()
         
@@ -64,12 +72,14 @@ class SQLiteDbUpdater:
             sqlLine = 'INSERT INTO "%s" VALUES%s;' % (newTableName, row)
             file.write('%s\n' % sqlLine)
 
-    def restoreTableByRowCol(tableRows, oldTableInfo, newTableName, newTableInfo, file):
+    def restoreTableByRowCol(tableRows, oldTableInfo, colNamesToRestore, newTableName, file):
         for row in tableRows:
             sqlColumnNames = []
             sqlColumnValues = []
-            for idx,col in enumerate(oldTableInfo['columns']):
-                sqlColumnNames.append( col[1] )
+            for colName in colNamesToRestore:
+                colInfo = oldTableInfo['byName'][colName]
+                idx = colInfo['']
+                sqlColumnNames.append( colName )
                 if isinstance(row[idx], str):
                     sqlColumnValues.append( "\'" + row[idx] + "\'" )
                 else:
@@ -164,18 +174,65 @@ class SQLiteDbUpdater:
                 self.log( "Table '%s' was probably renamed, will try to restore data to table '%s!" % (tableName, newTableName) )
                 newTableInfo = newDbTableInfo.get(newTableName)
 
-            if oldTableInfo['columns'] != newTableInfo['columns']:
-                self.log( "Table '%s' fingerprint has changed, maybe data will be not restored correctly!" % tableName )
-
             strategy = ""
-            if len(oldTableInfo['columns']) == len(newTableInfo['columns']):
+            # no columndef changed
+            if oldTableInfo['byIdx'] == newTableInfo['byIdx']:
                 restoreStrategy[tableName] = lambda tableRows, file, nameOfNewTable=newTableName : \
                     SQLiteDbUpdater.restoreTableByRow(tableRows, nameOfNewTable, file )
                 strategy = "ByRow"
             else:
-                restoreStrategy[tableName] = lambda tableRows, file, nameOfNewTable=newTableName : \
-                    SQLiteDbUpdater.restoreTableByRowCol( tableRows, oldTableInfo, nameOfNewTable, newTableInfo, file )
-                strategy = "ByRowCol"
+                self.log( "Table '%s' fingerprint has been changed, maybe data will be not restored correctly!" % tableName, logging.WARN )
+                # retrieving change info
+                addedCols = []
+                addedNotNullCols = []
+                changedTypeCols = []
+                changedToNotNullCols = []
+                removedCols = []
+                colNamesToRestore = []
+                for name,colInfo in oldTableInfo['byName'].items():
+                    if not name in newTableInfo['byName']:
+                        removedCols.append( name )
+                    else:
+                        colNamesToRestore.append[name]
+                        if newTableInfo['byName'][name]['type'] != colInfo['type']:
+                            changedTypeCols.append(name)
+                        elif newTableInfo['byName'][name]['notnull'] != colInfo['notnull'] and \
+                             newTableInfo['byName'][name]['notnull'] == 1:
+                            changedToNotNullCols.append(name)
+
+                for name,colInfo in newTableInfo['byName'].items():
+                    if not name in oldTableInfo['byName']:
+                        addedCols.append( name )
+                        if colInfo['notnull'] == 1:
+                            addedNotNullCols.append(name)
+
+                if len(changedToNotNullCols) or len(addedNotNullCols):
+                    self.log( "Column(s) '%s' has been created/changed to have 'notNull' values, if restoring of data leads to problems, "
+                              "start without 'notNull' in the first run, fill in data and then change definition to 'notNull' in the second run!"
+                               % ','.join( addedNotNullCols + changedToNotNullCols ), logging.WARN )
+
+                if len(changedTypeCols):
+                    self.log( "Type of column(s) '%s' has been changed, if restoring of data leads to problems, "
+                              "adapt data before change the datatype!" % ','.join( changedTypeCols ), logging.WARN )
+                    
+                # only col footprint changed, only added, only removed or only moved cols
+                if (len(addedCols) * len(removedCols)) == 0:
+                    restoreStrategy[tableName] = lambda tableRows, file, nameOfNewTable=newTableName : \
+                        SQLiteDbUpdater.restoreTableByRowCol( tableRows, oldTableInfo, colNamesToRestore, nameOfNewTable, file )
+                    strategy = "ByRowCol"
+                # check for renamed/ cols
+                elif len(addedCols) == len(removedCols):
+                    self.log( "Column(s) '%s' has been added and column(s) '%s' has been removed, this will be interpreted as changed col names!"
+                              "If this is leads to problems, try to reorder, rename, remove or add only one column in a single run!"
+                              % (','.join( addedCols ), ','.join( removedCols )), logging.WARN )
+                    restoreStrategy[tableName] = lambda tableRows, file, nameOfNewTable=newTableName : \
+                        SQLiteDbUpdater.restoreTableByRow(tableRows, nameOfNewTable, file )
+                    strategy = "ByRow"
+                else:
+                    self.log( "Column(s) '%s' has been added this matches not the number of column(s) '%s' which has been removed!"
+                              "Restoring is not possible, try to reorder, rename, remove or add only one column in a single run!"
+                              % (','.join( addedCols ), ','.join( removedCols )), logging.ERROR )
+                    raise ExportSQLiteError( 'Error', 'Restoring is not possible for table: %s!' % tableName)
 
             self.log( "Dump/Restore table \"%s\" by strategy: %s" % ( tableName, strategy ))
 
