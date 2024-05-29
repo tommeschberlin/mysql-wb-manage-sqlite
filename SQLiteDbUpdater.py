@@ -129,12 +129,12 @@ class SQLiteDbUpdater:
         sql = re.sub( "\"" +  prevDbName + "\"\\.", "\"" + self.dbName + "\".", sql)
         return sql
 
-    def commentIndexInSql(self, sql):
-        pattern = r"\n(CREATE INDEX[^\n]*)"
-        match = re.search(pattern, sql)
-        if not match:
-            return
-        sql = re.sub(pattern, "\n-- %s" % match.group(1), sql)
+    # because we want to use it in MS Access, indexname should not contain '.'
+    def fixIndexStatementsInSql(self, sql):
+        # CREATE INDEX "mydb"."teilnehmer.fk_kursId_idx" ON "teilnehmer" ("fk_kursid");
+        pattern = r'\nCREATE INDEX "([^"]+)"."([^\."]+)\.([^\."]+)" ON ([^\n]*)\n'
+        repl = r'\nCREATE INDEX "\1"."\2_\3" ON \4\n'
+        sql = re.sub( pattern, repl, sql )
         return sql
     
     # stores sql creation script for inspection purposes, create backup of an already existing one
@@ -247,7 +247,7 @@ class SQLiteDbUpdater:
 
         # set choosen filename stem as db name in sql definition
         sql = self.substituteDbNameInSql( self.createDbSql )
-        sql = self.commentIndexInSql( sql )
+        sql = self.fixIndexStatementsInSql( sql )
         SQLiteDbUpdater.storeSql( sql, self.dbDefinitionFileName)
 
         # create db in dbTmpFileName
