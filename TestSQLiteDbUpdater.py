@@ -3,6 +3,7 @@ import os
 import re
 import unittest
 import sqlite3
+import copy
 
 # Get the current script's directory
 current_dir = os.path.dirname(os.path.abspath(__file__))# Get the parent directory by going one level up
@@ -21,13 +22,13 @@ class TestSQLiteUpdater(unittest.TestCase):
         self.dbOrigFileName = self.dbOrigName + ".sqlite"
         self.dbOrigPath = os.path.join( self.workDir, self.dbOrigFileName )
         self.tableColsSQL = {
-            'kurs': [
-                '"id_kurs" INTEGER PRIMARY KEY NOT NULL',
-                '"kursname" VARCHAR(45)' ],
-            'teilnehmer': [
-                '"id_teilnehmer" INTEGER PRIMARY KEY NOT NULL',
+            'course': [
+                '"id_course" INTEGER PRIMARY KEY NOT NULL',
+                '"name" VARCHAR(45)' ],
+            'participant': [
+                '"id_participant" INTEGER PRIMARY KEY NOT NULL',
                 '"name" VARCHAR(45)',
-                '"kursid" INTEGER REFERENCES kurs (id_kurs)' # foreign key !!
+                '"course_id" INTEGER REFERENCES kurs (id_course)' # foreign key !!
             ]
         }
     
@@ -42,15 +43,15 @@ class TestSQLiteUpdater(unittest.TestCase):
         sql  = 'ATTACH "%s" AS "test";\n' % self.dbOrigFileName
         sql += 'BEGIN;\n'
 
-        sql += 'CREATE TABLE "test"."kurs"(\n'
-        sql += ',\n'.join( tableColsSQL['kurs'] )
+        sql += 'CREATE TABLE "test"."course"(\n'
+        sql += ',\n'.join( tableColsSQL['course'] )
         sql += ');\n'
 
-        sql += 'CREATE TABLE "test"."teilnehmer"(\n'
-        sql += ',\n'.join( tableColsSQL['teilnehmer'] )
+        sql += 'CREATE TABLE "test"."participant"(\n'
+        sql += ',\n'.join( tableColsSQL['participant'] )
         sql += ');\n'
 
-        sql += 'CREATE INDEX "test"."teilnehmer.kursId_idx" ON "teilnehmer" ("kursid");\n'
+        sql += 'CREATE INDEX "test"."participant.course_id_idx" ON "participant" ("course_id");\n'
         sql += 'COMMIT;\n'
 
         return sql
@@ -68,8 +69,8 @@ class TestSQLiteUpdater(unittest.TestCase):
 
     def executeSqlLine(self, dbFileName, sql):
         os.chdir( self.workDir )
-        conn = sqlite3.connect(dbFileName)
         try:        
+            conn = sqlite3.connect(dbFileName)
             cur = conn.cursor()
             cur.execute(sql)
             conn.commit()
@@ -80,66 +81,220 @@ class TestSQLiteUpdater(unittest.TestCase):
 
         return result
 
-    def getTableRows(self, dbFileName, tableName ):
-        rows = self.executeSqlLine(dbFileName, "select * from \"%s\"" % tableName )
-        return rows
+    def getTableData(self, dbFileName, tableName ):
+        try:
+            os.chdir( self.workDir )
+            conn = sqlite3.connect(dbFileName)
+            cur = conn.cursor()
+            cur.execute( "PRAGMA table_info(\"%s\");" % tableName )
+            info = cur.fetchall()
+        finally:
+            conn.close()
 
-    @unittest.skip("skipped temporarily")
-    def test_RestoreByRowStrategy(self):
-        # add data
-        sql  = 'INSERT INTO "kurs" VALUES(1, "Hüpfen");'
-        sql += 'INSERT INTO "teilnehmer" VALUES(1, "Shwze", 1);'
-        self.executeSqlScript(self.dbOrigFileName, sql)
+        colNames = []
+        for colInfo in info:
+            colNames.append(colInfo[1])
+
+        rows = self.executeSqlLine(dbFileName, "select * from \"%s\"" % tableName )
+        tableData = []
+        for row in rows:
+            rowData = {}
+            for colIdx,colName in enumerate(colNames):
+                rowData[colName] = row[colIdx]
+            tableData.append(rowData)
+
+        return tableData
+    
+    def addSomeData( self, dbFileName ):
+        courseData = [{
+            'id_course':1,
+            'name':'Jump'
+        }]
+        self.addTableData( dbFileName, 'course', courseData )
+
+        participantData = [{
+            'id_participant':1,
+            'name':'Shwze',
+            'course_id':1
+        }]
+        self.addTableData( dbFileName, 'participant', participantData )
+
+        return courseData, participantData
+    
+    def addTableData( self, dbFileName, tableName, tableData ):
+        colNames = []
+        for key,value in tableData[0].items():
+            colNames.append( key )
+
+        sqlScript = ''
+        for tableRow in tableData:
+            values = []
+            for key,value in tableRow.items():
+                if isinstance(value, str):
+                    values.append( "\'" + value + "\'" )
+                else:
+                    values.append( str(value) )
+            sqlScript += 'INSERT INTO "%s"(%s) VALUES(%s);' % (tableName, ','.join(colNames), ','.join(values) )
+
+        self.executeSqlScript(dbFileName, sqlScript)
+
+
+    # Test evaluateRestoreStrategy Case 1: RowByRow(No columns changed)
+    # @unittest.skip("skipped temporarily")
+    def test_RestoreRowByRowStrategy_no_columns_changed(self):
+        courseOrigData, participantOrigData = self.addSomeData(self.dbOrigFileName)
 
         # update with no changes in tabledefinition
         updater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(self.tableColsSQL))
         updater.update()
 
-        rows = self.getTableRows( self.dbOrigFileName, "kurs" )
-        self.assertEqual( 1, len(rows), "Table kurs should contain one row" )
-        self.assertEqual( 2, len(rows[0]), "Table kurs 1st row should contain two cols" )
+        self.assertEqual( self.getTableData( self.dbOrigFileName, "course" ), courseOrigData,
+                          "Course data should not change" )
+        self.assertEqual( self.getTableData( self.dbOrigFileName, "participant" ), participantOrigData,
+                         "Particpant data should not change" )
 
-        rows = self.getTableRows( self.dbOrigFileName, "teilnehmer" )
-        self.assertEqual( 1, len(rows), "Table teilnehmer should contain one row" )
-        self.assertEqual( 3, len(rows[0]), "Table teilnehmer 1st row should contain three cols" )
+    # Test evaluateRestoreStrategy Case 2: RowByNamedColumns(Columns added, columns removed or columns moved)
+    # @unittest.skip("skipped temporarily")
+    def test_RestoreRowByNamedColumnsStrategy_columns_added(self):
+        courseOrigData, participantOrigData = self.addSomeData(self.dbOrigFileName)
 
-    @unittest.skip("skipped temporarily")
-    def test_RestoreByRowColStrategy(self):
-        # add data
-        sql  = 'INSERT INTO "kurs" VALUES(1, "Hüpfen");'
-        sql += 'INSERT INTO "teilnehmer" VALUES(1, "Shwze", 1);'
-        self.executeSqlScript(self.dbOrigFileName, sql)
-
-        # add one col to teilnehmer
-        tableColsSQL = self.tableColsSQL
-        tableColsSQL['teilnehmer'].append( '"Vorname" VARCHAR(45)' )
+        # add one col to participant
+        tableColsSQL = copy.deepcopy(self.tableColsSQL)
+        tableColsSQL['participant'].append( '"Surname" VARCHAR(45)' )
         upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
         upater.update()
 
-        rows = self.getTableRows( self.dbOrigFileName, "kurs" )
-        self.assertEqual( 1, len(rows), "Table \"kurs\" should contain one row" )
-        self.assertEqual( 2, len(rows[0]), "Table \"kurs\" 1st row should contain two cols" )
+        self.assertEqual( self.getTableData( self.dbOrigFileName, "course" ), courseOrigData,
+                         "Course data should not change" )
 
-        rows = self.getTableRows( self.dbOrigFileName, "teilnehmer" )
-        self.assertEqual( 1, len(rows), "Table \"teilnehmer\" should contain one row" )
-        self.assertEqual( 4, len(rows[0]), "Table \"teilnehmer\" 1st row should contain four cols" )
-        self.assertEqual( None, rows[0][3], "New col in table \"teilnehmer\" should contain no data" )
+        participantData = self.getTableData( self.dbOrigFileName, "participant" )
+        expectedParticipantData = copy.deepcopy( participantOrigData )
+        expectedParticipantData[0]['Surname'] = None
 
-    def test_RestoreByRowColWithRenamedColStrategy(self):
-        # add data
-        sql  = 'INSERT INTO "kurs" VALUES(1, "Hüpfen");'
-        sql += 'INSERT INTO "teilnehmer" VALUES(1, "Shwze", 1);'
-        self.executeSqlScript(self.dbOrigFileName, sql)
+        self.assertEqual( participantData, expectedParticipantData, "Participant should have one more column with None data" )
 
-        # change teilnehmer col name to Name
-        tableColsSQL = self.tableColsSQL
-        tableColsSQL['teilnehmer'][1] = '"Name" VARCHAR(45)'
+
+    # Test evaluateRestoreStrategy Case 2: RowByNamedColumns(Columns added, columns removed or columns moved)
+    # @unittest.skip("skipped temporarily")
+    def test_RestoreRowByNamedColumnsStrategy_columns_removed(self):
+        courseOrigData, participantOrigData = self.addSomeData(self.dbOrigFileName)
+
+        # add one col to participant
+        tableColsSQL = copy.deepcopy( self.tableColsSQL )
+        tableColsSQL['participant'].append( '"Surname" VARCHAR(45)' )
         upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
         upater.update()
 
-        rows = self.getTableRows( self.dbOrigFileName, "teilnehmer" )
+        participantNewData = [{
+            'id_participant':2,
+            'name':'tom',
+            'course_id': 1,
+            'Surname':'Shwze'
+        }]
+        self.addTableData( self.dbOrigFileName, 'participant', participantNewData )
 
-        None
+        participantData = self.getTableData( self.dbOrigFileName, "participant" )
+
+        self.assertEqual( participantData[1], participantNewData[0], "Participant should have one more row/column with expected data" )
+
+        # set old participant definition (without Surname col)
+        upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(self.tableColsSQL))
+        upater.update()
+
+        expectedParticipantData = [{
+            'id_participant':2,
+            'name':'tom',
+            'course_id': 1
+        }]
+        participantData = self.getTableData( self.dbOrigFileName, "participant" )
+        self.assertEqual( participantData[1], expectedParticipantData[0], "Participant should have orig data" )
+
+    # Test evaluateRestoreStrategy Case 2: RowByNamedColumns(Columns added, columns removed or columns moved)
+    # @unittest.skip("skipped temporarily")
+    def test_RestoreRowByNamedColumnsStrategy_columns_moved(self):
+        courseOrigData, participantOrigData = self.addSomeData(self.dbOrigFileName)
+
+        # reverse cols of participant
+        tableColsSQL = copy.deepcopy( self.tableColsSQL )
+        colsParticipant = tableColsSQL['participant']
+        colsParticipant.reverse()
+        tableColsSQL['participant'] = colsParticipant
+
+        upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
+        upater.update()
+
+        expectedParticipantData = [{
+            'course_id': 1,
+            'name':'Shwze',
+            'id_participant':1,
+        }]
+
+        participantData = self.getTableData( self.dbOrigFileName, "participant" )
+        self.assertNotEqual( str(participantData[0]), str(participantOrigData[0]), "Participant should have changed column order" )
+        self.assertEqual( str(participantData[0]), str(expectedParticipantData[0]), "Participant should have expected new column order" )
+        self.assertEqual( participantData[0], expectedParticipantData[0], "Participant should have expected new column order" )
+
+    # Test evaluateRestoreStrategy Case 3: RowByRow(Columns renamed)
+    # @unittest.skip("skipped temporarily")
+    def test_RestoreRowByRowStrategy_columns_renamed(self):
+        courseOrigData, participantOrigData = self.addSomeData(self.dbOrigFileName)
+
+        # change participant col name to Name
+        tableColsSQL = copy.deepcopy( self.tableColsSQL )
+        tableColsSQL['participant'][1] = '"Name" VARCHAR(45)'
+        upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
+        upater.update()
+
+        expectedParticipantData = [{
+            'id_participant':1,
+            'Name':'Shwze',
+            'course_id': 1,
+        }]
+        participantData = self.getTableData( self.dbOrigFileName, "participant" )
+
+        self.assertEqual( participantData[0], expectedParticipantData[0], "Same data at renamed colummn expected" )
+
+    # Test evaluateRestoreStrategy Case 3.1: ColumnNames has been renamed and moved -> Error
+    # @unittest.skip("skipped temporarily")
+    def test_RestoreRowByRowStrategy_columns_renamed_and_moved(self):
+        self.addSomeData(self.dbOrigFileName)
+
+        # change participant col name to Name
+        tableColsSQL = copy.deepcopy( self.tableColsSQL )
+        tableColsSQL['participant'][1] = '"Name" VARCHAR(45)'
+
+        # reverse cols of participant
+        colsParticipant = tableColsSQL['participant']
+        colsParticipant.reverse()
+        tableColsSQL['participant'] = colsParticipant
+
+        upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
+
+        with self.assertRaises( ImportError ):
+            upater.update()
+
+    # Test evaluateRestoreStrategy Case 4: added and removed are not equal and both > 0 -> Error
+    # @unittest.skip("skipped temporarily")
+    def test_Restore_different_count_of_rows_added_removed(self):
+        self.addSomeData(self.dbOrigFileName)
+
+        # change participant col name to Name -> 1 added 1 remove
+        tableColsSQL = copy.deepcopy( self.tableColsSQL )
+        tableColsSQL['participant'][1] = '"NewName" VARCHAR(45)'
+        # add participant col -> 1 added ( in sum 2 added 1 removed)
+        tableColsSQL['participant'].append( '"NewColumn" VARCHAR(45)' )
+        upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
+        with self.assertRaises( ImportError ):
+            upater.update()
+
+    # @unittest.skip("skipped temporarily")
+    def test_fixIndexStatementsInSql(self):
+        creationSQL = self.getDbCreationSQL(self.tableColsSQL)
+
+        upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, creationSQL)
+        upater.update()
+        res = self.executeSqlLine(self.dbOrigFileName, "PRAGMA index_list(participant);")
+        self.assertEqual( res[0][1], 'participant_course_id_idx', "No dots are allowed in index-names" )
 
 if __name__ == '__main__':
     unittest.main()
