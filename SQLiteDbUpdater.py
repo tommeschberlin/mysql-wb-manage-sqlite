@@ -70,22 +70,24 @@ class SQLiteDbUpdater:
     def restoreTableByRow(tableRows, newTableName, file):
         for row in tableRows:
             sqlLine = 'INSERT INTO "%s" VALUES%s;' % (newTableName, row)
+            sqlLine = re.sub( "None", "NULL", sqlLine)
             file.write('%s\n' % sqlLine)
 
     def restoreTableByRowCol(tableRows, oldTableInfo, colNamesToRestore, newTableName, file):
         for row in tableRows:
-            sqlColumnNames = []
-            sqlColumnValues = []
+            colNames = []
+            values = []
             for colName in colNamesToRestore:
                 colInfo = oldTableInfo['byName'][colName]
-                idx = colInfo['']
-                sqlColumnNames.append( colName )
+                idx = colInfo['cid']
+                colNames.append( colName )
                 if isinstance(row[idx], str):
-                    sqlColumnValues.append( "\'" + row[idx] + "\'" )
+                    values.append( "\'" + row[idx] + "\'" )
                 else:
-                    sqlColumnValues.append( str(row[idx]) )
+                    values.append( str(row[idx]) )
             
-            sqlLine = 'INSERT INTO "%s"(%s) VALUES(%s)' % (newTableName, ','.join(sqlColumnNames), ','.join(sqlColumnValues) )
+            sqlLine = 'INSERT INTO "%s"(%s) VALUES(%s);' % (newTableName, ','.join(colNames), ','.join(values) )
+            sqlLine = re.sub( "None", "NULL", sqlLine)
             file.write('%s\n' % sqlLine)
 
     # dump data of already existing database
@@ -175,11 +177,11 @@ class SQLiteDbUpdater:
                 newTableInfo = newDbTableInfo.get(newTableName)
 
             strategy = ""
-            # no columndef changed
+            # Case 1: no columndef changed
             if oldTableInfo['byIdx'] == newTableInfo['byIdx']:
                 restoreStrategy[tableName] = lambda tableRows, file, nameOfNewTable=newTableName : \
                     SQLiteDbUpdater.restoreTableByRow(tableRows, nameOfNewTable, file )
-                strategy = "ByRow"
+                strategy = "RowByRow(No columns changed)"
             else:
                 self.log( "Table '%s' fingerprint has been changed, maybe data will be not restored correctly!" % tableName, logging.WARN )
                 # retrieving change info
@@ -193,7 +195,7 @@ class SQLiteDbUpdater:
                     if not name in newTableInfo['byName']:
                         removedCols.append( name )
                     else:
-                        colNamesToRestore.append[name]
+                        colNamesToRestore.append(name)
                         if newTableInfo['byName'][name]['type'] != colInfo['type']:
                             changedTypeCols.append(name)
                         elif newTableInfo['byName'][name]['notnull'] != colInfo['notnull'] and \
@@ -215,22 +217,37 @@ class SQLiteDbUpdater:
                     self.log( "Type of column(s) '%s' has been changed, if restoring of data leads to problems, "
                               "adapt data before change the datatype!" % ','.join( changedTypeCols ), logging.WARN )
                     
+                # Case 2:
                 # only col footprint changed, only added, only removed or only moved cols
                 if (len(addedCols) * len(removedCols)) == 0:
                     restoreStrategy[tableName] = lambda tableRows, file, nameOfNewTable=newTableName : \
                         SQLiteDbUpdater.restoreTableByRowCol( tableRows, oldTableInfo, colNamesToRestore, nameOfNewTable, file )
-                    strategy = "ByRowCol"
-                # check for renamed/ cols
+                    strategy = "RowByNamedColumns(Columns added, columns removed or columns moved)"
+                # Case 3:
+                # check for renamed cols
                 elif len(addedCols) == len(removedCols):
                     self.log( "Column(s) '%s' has been added and column(s) '%s' has been removed, this will be interpreted as changed col names!"
                               "If this is leads to problems, try to reorder, rename, remove or add only one column in a single run!"
                               % (','.join( addedCols ), ','.join( removedCols )), logging.WARN )
+                    # check if unchanged column names stays at same index
+                    movedCols = []
+                    for nameToRestore in colNamesToRestore:
+                        if newTableInfo['byName'][nameToRestore]['cid'] != oldTableInfo['byName'][nameToRestore]['cid']:
+                            movedCols.append( nameToRestore )
+                    # Case 3.1: ColumnNames has been renamed and moved -> Error
+                    if len(movedCols):
+                        self.log( "Column(s) '%s' has been moved to new positions!"
+                                  "Restoring is not possible, try to reorder, rename, remove or add rows only in a single run!"
+                                  % ','.join( movedCols ), logging.ERROR )
+                        raise ExportSQLiteError( 'Error', 'Restoring is not possible for table: %s!' % tableName)
+
                     restoreStrategy[tableName] = lambda tableRows, file, nameOfNewTable=newTableName : \
                         SQLiteDbUpdater.restoreTableByRow(tableRows, nameOfNewTable, file )
-                    strategy = "ByRow"
+                    strategy = "RowByRow(Columns renamed)"
+                # Case 4: added and removed are not equal and both > 0 -> Error
                 else:
-                    self.log( "Column(s) '%s' has been added this matches not the number of column(s) '%s' which has been removed!"
-                              "Restoring is not possible, try to reorder, rename, remove or add only one column in a single run!"
+                    self.log( "Column(s) '%s' has been added, this matches not the number of column(s) '%s' which has been removed!"
+                              "Restoring is not possible, try to reorder, rename, remove or add rows only in a single run!"
                               % (','.join( addedCols ), ','.join( removedCols )), logging.ERROR )
                     raise ExportSQLiteError( 'Error', 'Restoring is not possible for table: %s!' % tableName)
 
