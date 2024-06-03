@@ -24,11 +24,12 @@ class SQLiteDbUpdater:
 
     def log(self, msg, level=logging.INFO):
         if self.logger:
-            logging.log( level, msg )
+            self.logger.log( level, msg )
 
     def enableLogging(self):
         self.logger = logging.getLogger("SQLiteDbUpdater")
         logging.basicConfig(filename=self.logFile, filemode='wt', level=logging.DEBUG, format='%(asctime)s %(levelname)s %(message)s', datefmt='%H:%M:%S')
+        return self.logger
 
     def getTableInfo(cursor, tableName):
         tableInfoByColName = {}
