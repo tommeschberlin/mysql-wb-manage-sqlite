@@ -22,6 +22,7 @@
 import os
 import re
 from io import StringIO
+import logging
 
 import grt
 import mforms
@@ -29,7 +30,7 @@ import SQLiteDbUpdater
 
 from wb import DefineModule, wbinputs
 from workbench.ui import WizardForm, WizardPage
-from mforms import newButton, newCodeEditor, FileChooser
+from mforms import newButton, newCodeEditor, FileChooser, newLabel
 
 ModuleInfo = DefineModule(name='ExportSQLite',
                           author='Tatsushi Demachi',
@@ -507,6 +508,12 @@ class ExportSQLiteWizard_PreviewPage(WizardPage):
         self.sql_text.set_language(mforms.LanguageMySQL)
         self.sql_text.set_text(sql_text)
 
+        self.log_text = mforms.newCodeEditor()
+        self.log_text.set_language(mforms.LanguageJson)
+        
+        self.label_log = mforms.newLabel('Log output:')
+        self.label_log.set_style(mforms.BoldStyle)
+
     def go_cancel(self):
         self.main.finish()
 
@@ -518,8 +525,11 @@ class ExportSQLiteWizard_PreviewPage(WizardPage):
         button_box.add(self.copy_button, False, True)
         button_box.add(self.create_db_button, False, True)
 
-        self.content.add_end(button_box, False, False)
-        self.content.add_end(self.sql_text, True, True)
+        self.content.add(self.sql_text, True, True)
+        self.content.add(button_box, False, False)
+
+        self.content.add(self.label_log, False, False)
+        self.content.add_end(self.log_text, True, True)
 
     def save_clicked(self):
         file_chooser = mforms.newFileChooser(self.main, mforms.SaveFile)
@@ -553,15 +563,26 @@ class ExportSQLiteWizard_PreviewPage(WizardPage):
         
         path = file_chooser.get_path()
         sql = self.sql_text.get_text(False)
+                
+        logBuffer = StringIO()
+        ch = logging.StreamHandler(logBuffer)
+        ch.setLevel(logging.DEBUG)
+        formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s', '%H:%M:%S')
+        ch.setFormatter(formatter)
+        
         try:
-            upater = SQLiteDbUpdater.SQLiteDbUpdater( path, sql )
-            upater.enableLogging()
-            upater.update()
+            updater = SQLiteDbUpdater.SQLiteDbUpdater( path, sql )
+            logger = updater.enableLogging()
+            logger.addHandler(ch)
+            updater.update()
         except Exception as e:
             mforms.Utilities.show_error(
                 'Create/Update SQLite database',
                 'Could not write to database "%s": %s' % (path, str(e)),
                 'OK','','')
+
+        self.log_text.set_text( logBuffer.getvalue() )
+        logBuffer.close()
 
 class ExportSQLiteWizard(WizardForm):
     def __init__(self, sql_text):
