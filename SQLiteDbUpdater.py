@@ -60,6 +60,49 @@ class SQLiteDbUpdater:
             conn.close()
         
         return dbTableInfo
+    
+    # get fk names
+    def getDbForeignIndexNames(dbFileName):
+        dbForeignIndexNames = []
+        conn = sqlite3.connect(dbFileName)
+        try:
+            cur = conn.cursor()
+            cur.execute( "select name from sqlite_master where type='index'" )
+            indexNames = cur.fetchall()
+            for (indexName,) in indexNames:
+                dbForeignIndexNames.append( indexName )
+        finally:
+            conn.close()
+        
+        return dbForeignIndexNames
+
+    def getDbViewNames(dbFileName):
+        dbViewNames = []
+        conn = sqlite3.connect(dbFileName)
+        try:
+            cur = conn.cursor()
+            cur.execute( "select name from sqlite_master where type='view'" )
+            viewNames = cur.fetchall()
+            for (viewName,) in viewNames:
+                dbViewNames.append(viewName)
+        finally:
+            conn.close()
+        
+        return dbViewNames
+
+    def getDbTriggerNames(dbFileName):
+        dbTriggerNames = []
+        conn = sqlite3.connect(dbFileName)
+        try:
+            cur = conn.cursor()
+            cur.execute( "select name from sqlite_master where type='trigger'" )
+            triggerNames = cur.fetchall()
+            for (triggerName,) in triggerNames:
+                dbTriggerNames.append(triggerName)
+        finally:
+            conn.close()
+        
+        return dbTriggerNames
 
     # check if database already contains data
     def containsData(dbTableInfo):
@@ -144,13 +187,22 @@ class SQLiteDbUpdater:
         return re.search( "^[a-zA-Z+-_]*$", name ) != None
 
     # check tablenames, columnames for usable characters    
-    def checkNames( self, dbTableInfo ):
+    def checkNames( self, dbTableInfo, dbForeignIndexNames, dbViewNames, dbTriggerNames ):
         for tableName, tableInfo in dbTableInfo.items():
             if not self.nameValid( tableName ):
                 raise ExportSQLiteError( 'Error', 'Tablename "%s" contains not allowed characters!' % tableName )
             for colName, colInfo in tableInfo['byName'].items():
                 if not self.nameValid( colName ):
                     raise ExportSQLiteError( 'Error', 'Columname "%s" of table "%s" contains not allowed characters!' % (colName, tableName) )
+        for indexName in dbForeignIndexNames:
+            if not self.nameValid( indexName ):
+                raise ExportSQLiteError( 'Error', 'Indexname "%s" contains not allowed characters!' % indexName )
+        for viewName in dbViewNames:
+            if not self.nameValid( viewName ):
+                raise ExportSQLiteError( 'Error', 'Viewname "%s" contains not allowed characters!' % viewName )
+        for triggerName in dbTriggerNames:
+            if not self.nameValid( triggerName ):
+                raise ExportSQLiteError( 'Error', 'Triggername "%s" contains not allowed characters!' % triggerName )
     
     # stores sql creation script for inspection purposes, create backup of an already existing one
     def storeSql(sql, sqlFileName):
@@ -292,7 +344,10 @@ class SQLiteDbUpdater:
             conn.close()
 
         newDbTableInfo = SQLiteDbUpdater.getDbTableInfo( self.dbTmpFileName )
-        self.checkNames( newDbTableInfo )
+        newDbForeignIndexNames = SQLiteDbUpdater.getDbForeignIndexNames( self.dbTmpFileName )
+        newDbViewNames = SQLiteDbUpdater.getDbViewNames( self.dbTmpFileName )
+        newDbTriggerNames = SQLiteDbUpdater.getDbTriggerNames( self.dbTmpFileName )
+        self.checkNames( newDbTableInfo, newDbForeignIndexNames, newDbViewNames, newDbTriggerNames )
 
         # backup/restore data
         if os.path.isfile(self.dbFileName):
