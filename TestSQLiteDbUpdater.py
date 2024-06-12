@@ -43,13 +43,10 @@ class TestSQLiteUpdater(unittest.TestCase):
         sql  = 'ATTACH "%s" AS "test";\n' % self.dbOrigFileName
         sql += 'BEGIN;\n'
 
-        sql += 'CREATE TABLE "test"."course"(\n'
-        sql += ',\n'.join( tableColsSQL['course'] )
-        sql += ');\n'
-
-        sql += 'CREATE TABLE "test"."participant"(\n'
-        sql += ',\n'.join( tableColsSQL['participant'] )
-        sql += ');\n'
+        for tableName,colDefinition in tableColsSQL.items():
+            sql += 'CREATE TABLE "test"."%s"(\n' % tableName
+            sql += ',\n'.join( colDefinition )
+            sql += ');\n'
 
         sql += 'CREATE INDEX "test"."participant.course_id_idx" ON "participant" ("course_id");\n'
         sql += 'COMMIT;\n'
