@@ -139,6 +139,18 @@ class SQLiteDbUpdater:
         repl = r'\nCREATE INDEX "\1"."\2_\3" ON \4\n'
         sql = re.sub( pattern, repl, sql )
         return sql
+
+    def nameValid( self, name ):
+        return re.search( "^[a-zA-Z+-_]*$", name ) != None
+
+    # check tablenames, columnames for usable characters    
+    def checkNames( self, dbTableInfo ):
+        for tableName, tableInfo in dbTableInfo.items():
+            if not self.nameValid( tableName ):
+                raise ExportSQLiteError( 'Error', 'Tablename "%s" contains not allowed characters!' % tableName )
+            for colName, colInfo in tableInfo['byName'].items():
+                if not self.nameValid( colName ):
+                    raise ExportSQLiteError( 'Error', 'Columname "%s" of table "%s" contains not allowed characters!' % (colName, tableName) )
     
     # stores sql creation script for inspection purposes, create backup of an already existing one
     def storeSql(sql, sqlFileName):
@@ -263,7 +275,6 @@ class SQLiteDbUpdater:
         self.log('Update started')
         os.chdir( self.workDir )
 
-        # set choosen filename stem as db name in sql definition
         sql = self.substituteDbNameInSql( self.createDbSql )
         sql = self.fixIndexStatementsInSql( sql )
         SQLiteDbUpdater.storeSql( sql, self.dbDefinitionFileName)
@@ -280,11 +291,13 @@ class SQLiteDbUpdater:
             cur.close()
             conn.close()
 
+        newDbTableInfo = SQLiteDbUpdater.getDbTableInfo( self.dbTmpFileName )
+        self.checkNames( newDbTableInfo )
+
         # backup/restore data
         if os.path.isfile(self.dbFileName):
             oldDbTableInfo = SQLiteDbUpdater.getDbTableInfo( self.dbFileName )
             if SQLiteDbUpdater.containsData(oldDbTableInfo):
-                newDbTableInfo = SQLiteDbUpdater.getDbTableInfo( self.dbTmpFileName )
                 restoreStrategy = self.evaluateRestoreStrategy(oldDbTableInfo, newDbTableInfo)
                 SQLiteDbUpdater.dumpData(self.dbFileName, self.dbRestoreFileName, restoreStrategy)
                 SQLiteDbUpdater.restoreData(self.dbTmpFileName, self.dbRestoreFileName)

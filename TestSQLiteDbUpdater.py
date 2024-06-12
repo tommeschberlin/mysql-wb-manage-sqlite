@@ -293,5 +293,36 @@ class TestSQLiteUpdater(unittest.TestCase):
         res = self.executeSqlLine(self.dbOrigFileName, "PRAGMA index_list(participant);")
         self.assertEqual( res[0][1], 'participant_course_id_idx', "No dots are allowed in index-names" )
 
+    # Test checkNames
+    # @unittest.skip("skipped temporarily")
+    def test_CheckNames(self):
+        # should work without errors
+        upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(self.tableColsSQL))
+        upater.update()
+
+        # test wrong tablename
+        tableColsSQL = copy.deepcopy( self.tableColsSQL )
+        tableColsSQL['wrong tablename'] = \
+        [
+            '"id" INTEGER PRIMARY KEY NOT NULL',
+            '"name" VARCHAR(45)'
+        ]
+        
+        upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
+        with self.assertRaises( ImportError ):
+            upater.update()
+
+        # test wrong colname
+        tableColsSQL = copy.deepcopy( self.tableColsSQL )
+        tableColsSQL['wrongCols1'] = \
+        [
+            '"id" INTEGER PRIMARY KEY NOT NULL',
+            '"wrongüname" VARCHAR(45)'
+        ]
+        
+        upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
+        with self.assertRaises( ImportError ):
+            upater.update()
+
 if __name__ == '__main__':
     unittest.main()
