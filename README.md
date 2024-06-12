@@ -32,17 +32,17 @@ The **SQLiteDbUpdater** tries to keep your existing table data, but SQLite can n
 1) **Copy complete rows**  
    Works fine for all unchanged tables of your database
 2) **Copy rows column by column matching their names**  
-   Matches the column names of changed tables and puts the data in. Thus you can alter table defintions by adding or removing table columns.
-2) **Copy rows column by column matching their name or footprint**  (concept is clear, planned to come in the near future)
-  Tries to guess renamed columns by their type/position footprint in the column order. This works safe if you change only one column name per db-update. Not changing order and type will also work perfect.
+   Matches the column names of changed tables and puts the data in. Thus you can alter table defintions by adding, moving or removing table columns.
+3) **Copy complete rows even when columnames has changed **  
+   Check if column names have changed, but not their order at all. Data of columns with changed column name will be kept.
 
 ## Restrictions / Problems
 
-1) the SQLite ODBC driver causes problems at import to ms-access if tables contain indicees for foreign keys, so indexes are leaved out from database creation
+1) the SQLite ODBC driver causes problems at import to ms-access if tables contain indicees for foreign keys, 
+   because of MYSQL Workbench will put into a '.' the names. This '.' will be automatically replaced by a '_'
 2) Creation of SQL code works not for **`TIMESTAMP UPDATE`**, therefore do not use auto updating timstamps for now
 3) If changing of a column type leads to a more restricive type, you should alter your data before changing the type
-4) Changing the name of tables for existing db's is not supported for now
-5) Changing the name of table columns for existing db's is not supported for now
+4) Changing the name of tables for existing db's is not supported for now. You have to backup/restore tabledata by yourself
 
 ## License
 
