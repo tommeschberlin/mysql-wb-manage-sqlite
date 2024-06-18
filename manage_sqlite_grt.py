@@ -576,10 +576,9 @@ class ExportSQLiteWizard_PreviewPage(WizardPage):
             logger.addHandler(ch)
             updater.update()
         except Exception as e:
-            mforms.Utilities.show_error(
-                'Create/Update SQLite database',
-                'Could not write to database "%s": %s' % (path, str(e)),
-                'OK','','')
+            errString = 'Could not write to database "%s": %s' % (path, str(e))
+            mforms.Utilities.show_error( 'Create/Update SQLite database', errString, 'OK','','')
+            logger.error( 'Error in "Create/Update SQLite database": %s' % errString )
 
         self.log_text.set_text( logBuffer.getvalue() )
         logBuffer.close()
