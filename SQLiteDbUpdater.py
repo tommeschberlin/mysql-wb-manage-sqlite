@@ -166,10 +166,10 @@ class SQLiteDbUpdater:
 
     # replace the dbname with the choosen filename stem                
     def substituteDbNameInSql(self, sql):
-        pattern = r"ATTACH \"([^ \"]+)\" AS \"([^ \";]+)\""
+        pattern = r"ATTACH \"([^\"]+)\" AS \"([^\";]+)\""
         match = re.search(pattern, sql)
         if not match:
-            raise ExportSQLiteError( 'Error', 'Cant evaluate/replace ATTACH ... line!')
+            raise ExportSQLiteError( 'Error', 'Cant find ATTACH pattern in SQL' )
         prevDbName = match.group(2)
         sql = re.sub(pattern, "ATTACH \"%s\" AS \"%s\"" %(self.dbTmpFileName,self.dbName), sql)
         sql = re.sub( "\"" +  prevDbName + "\"\\.", "\"" + self.dbName + "\".", sql)
