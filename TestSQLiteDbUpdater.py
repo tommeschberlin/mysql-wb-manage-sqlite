@@ -135,6 +135,22 @@ class TestSQLiteUpdater(unittest.TestCase):
 
         self.executeSqlScript(dbFileName, sqlScript)
 
+    # Test test_substituteDbNameInSql with errornous userdata
+    # @unittest.skip("skipped temporarily")
+    def test_substituteDbNameInSql(self):
+        sql = '-- Schema: Auftraggebersicht Wartungsplanung\n' +\
+              'ATTACH "Auftraggebersicht Wartungsplanung.sdb" AS "Auftraggebersicht Wartungsplanung";\n' +\
+              'BEGIN;\n'
+        updater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(self.tableColsSQL))
+        # should not raise an exception
+        success = False
+        try:
+            updater.substituteDbNameInSql( sql )
+            success = True
+        except Exception as e:
+            None
+
+        self.assertTrue( success, "substituteDbNameInSql should work in this example" )
 
     # Test evaluateRestoreStrategy Case 1: RowByRow(No columns changed)
     # @unittest.skip("skipped temporarily")
