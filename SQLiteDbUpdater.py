@@ -179,8 +179,8 @@ class SQLiteDbUpdater:
     # because we want to use it in MS Access, indexname should not contain '.'
     def fixIndexStatementsInSql(self, sql):
         # CREATE INDEX "mydb"."teilnehmer.fk_kursId_idx" ON "teilnehmer" ("fk_kursid");
-        pattern = r'\nCREATE INDEX "([^"]+)"."([^\."]+)\.([^\."]+)" ON ([^\n]*)\n'
-        repl = r'\nCREATE INDEX "\1"."\2_\3" ON \4\n'
+        pattern = r'\nCREATE INDEX "([^"]+)"."([^\."]+)\.([^\."]+)" ON ([^\n]*)'
+        repl = r'\nCREATE INDEX "\1"."\2_\3" ON \4'
         sql = re.sub( pattern, repl, sql )
         return sql
 

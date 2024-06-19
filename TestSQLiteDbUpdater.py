@@ -309,6 +309,17 @@ class TestSQLiteUpdater(unittest.TestCase):
         res = self.executeSqlLine(self.dbOrigFileName, "PRAGMA index_list(participant);")
         self.assertEqual( res[0][1], 'participant_course_id_idx', "No dots are allowed in index-names" )
 
+        sql = '\nCREATE INDEX "W"."W.fk_W_W1_idx" ON "W" ("W_idW");\n'\
+              'CREATE INDEX "WA"."W.fk_W_S1_idx" ON "W" ("S_idS");\n'
+
+        updater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(self.tableColsSQL))
+        res = re.findall( '\\.', sql )
+        self.assertEqual( len(res), 4, "No dots are allowed in index-names" )
+
+        sql = updater.fixIndexStatementsInSql( sql )
+        res = re.findall( '\\.', sql )
+        self.assertEqual( len(res), 2, "No dots are allowed in index-names" )
+
     # Test checkNames
     # @unittest.skip("skipped temporarily")
     def test_CheckNames(self):
