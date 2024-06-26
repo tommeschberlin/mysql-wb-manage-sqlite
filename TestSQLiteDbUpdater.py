@@ -351,5 +351,23 @@ class TestSQLiteUpdater(unittest.TestCase):
         with self.assertRaises( ImportError ):
             upater.update()
 
+    # Test evaluateRestoreStrategy Case 1: RowByRow(No columns changed)
+    # @unittest.skip("skipped temporarily")
+    def test_BackupRestoreSpecialCharsInData(self):
+        courseOrigData, participantOrigData = self.addSomeData(self.dbOrigFileName)
+        moreParticipantOrigData = [{
+            'id_participant':2,
+            'name':'Rēzekne',
+            'course_id':1
+        }]
+        self.addTableData( self.dbOrigFileName, 'participant', moreParticipantOrigData )
+
+        # update with no changes in tabledefinition
+        updater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(self.tableColsSQL))
+        updater.update()
+
+        self.assertEqual( self.getTableData( self.dbOrigFileName, "participant" ), 
+                          participantOrigData + moreParticipantOrigData, "Participant data should not change" )
+
 if __name__ == '__main__':
     unittest.main()

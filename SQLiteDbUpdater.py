@@ -116,7 +116,8 @@ class SQLiteDbUpdater:
         for row in tableRows:
             sqlLine = 'INSERT INTO "%s" VALUES%s;' % (newTableName, row)
             sqlLine = re.sub( "None", "NULL", sqlLine)
-            file.write('%s\n' % sqlLine)
+            sqlLine += '\n'
+            file.write(sqlLine.encode('utf8'))
 
     def restoreTableByRowCol(tableRows, oldTableInfo, colNamesToRestore, newTableName, file):
         for row in tableRows:
@@ -133,14 +134,15 @@ class SQLiteDbUpdater:
             
             sqlLine = 'INSERT INTO "%s"(%s) VALUES(%s);' % (newTableName, ','.join(colNames), ','.join(values) )
             sqlLine = re.sub( "None", "NULL", sqlLine)
-            file.write('%s\n' % sqlLine)
+            sqlLine += '\n'
+            file.write(sqlLine.encode('utf8'))
 
     # dump data of already existing database
     def dumpData(dbFileName, dbDumpFileName, dumpStrategy):
         conn = sqlite3.connect(dbFileName)
         try:
             cur = conn.cursor()
-            with open(dbDumpFileName, 'w') as f:
+            with open(dbDumpFileName, 'wb') as f:
                 cur.execute( "select name from sqlite_master where type='table'" )
                 tableNames = cur.fetchall()
                 for (tableName,) in tableNames:
@@ -154,8 +156,8 @@ class SQLiteDbUpdater:
 
     # restore dumped data to temporary created database
     def restoreData( dbFileName, dbDumpFileName ):
-        with open(dbDumpFileName, 'rt') as f:
-            sql = f.read()
+        with open(dbDumpFileName, 'rb') as f:
+            sql = f.read().decode('utf8')
             conn = sqlite3.connect(dbFileName)
             cur = conn.cursor()
             try:
