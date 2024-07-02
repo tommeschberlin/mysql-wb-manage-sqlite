@@ -1,7 +1,7 @@
+4: Backup/restore of data without table column names at every row should be possible
+
 3: Views
-  * backup/restore
   * what about views of changed tables definition
-  * see restoring mode 1..3
   * tests for it
 
 
