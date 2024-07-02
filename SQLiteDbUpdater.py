@@ -114,29 +114,45 @@ class SQLiteDbUpdater:
         return False
 
     def restoreTableByRow( self, tableRows, newTableName, file):
-        for row in tableRows:
-            sqlLine = 'INSERT INTO "%s" VALUES%s;' % (newTableName, row)
-            sqlLine = re.sub( "None", "NULL", sqlLine)
-            sqlLine += '\n'
-            file.write(sqlLine.encode('utf8'))
+        sql = 'INSERT INTO "%s" VALUES\n' % newTableName
+        file.write(sql.encode('utf8'))
 
-    def restoreTableByRowCol( self, tableRows, oldTableInfo, colNamesToRestore, newTableName, file):
+        sqlLines = []
         for row in tableRows:
-            colNames = []
+            sqlLine = '%s%s' % (row,'') # creapy formatting here, to get it work
+            sqlLine = re.sub( "None", "NULL", sqlLine)
+            sqlLines.append(sqlLine)
+
+        file.write(',\n'.join(sqlLines).encode('utf8'))
+        file.write(";\n".encode('utf8'))
+
+    def restoreTableByRowCol(self, tableRows, oldTableInfo, colNamesToRestore, newTableName, file):
+        oldColIdxByName = {} 
+        for colName in colNamesToRestore:
+            colInfo = oldTableInfo['byName'][colName]
+            oldColIdxByName[colName] = colInfo['cid']
+
+        sql = 'INSERT INTO "%s"(%s) VALUES\n' % (newTableName, ','.join(colNamesToRestore) )
+        file.write(sql.encode('utf8'))
+
+        sqlLines = []
+        for row in tableRows:
             values = []
             for colName in colNamesToRestore:
-                colInfo = oldTableInfo['byName'][colName]
-                idx = colInfo['cid']
-                colNames.append( colName )
+                idx = oldColIdxByName[colName]
+                # because of reordering we have treat different by type (strings and the other types)
+                # in restoreTableByRow the list to string converter does this implicitely
                 if isinstance(row[idx], str):
                     values.append( "\'" + row[idx] + "\'" )
                 else:
                     values.append( str(row[idx]) )
             
-            sqlLine = 'INSERT INTO "%s"(%s) VALUES(%s);' % (newTableName, ','.join(colNames), ','.join(values) )
+            sqlLine = '(%s)' % ','.join(values)
             sqlLine = re.sub( "None", "NULL", sqlLine)
-            sqlLine += '\n'
-            file.write(sqlLine.encode('utf8'))
+            sqlLines.append(sqlLine)
+
+        file.write(',\n'.join(sqlLines).encode('utf8'))
+        file.write(";\n".encode('utf8'))
 
     # dump data of already existing database
     def dumpData(self, dbFileName, dbDumpFileName, dumpStrategy):
