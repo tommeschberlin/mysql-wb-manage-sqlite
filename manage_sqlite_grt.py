@@ -21,6 +21,7 @@
 
 import os
 import re
+import sys
 from io import StringIO
 import logging
 
@@ -576,7 +577,8 @@ class ExportSQLiteWizard_PreviewPage(WizardPage):
             logger.addHandler(ch)
             updater.update()
         except Exception as e:
-            errString = 'Could not write to database "%s": %s' % (path, str(e))
+            excType, value, traceback = sys.exc_info()
+            errString = 'Could not write to database "%s": %s %s (%s)' % (path, excType.__name__, str(e), traceback)
             mforms.Utilities.show_error( 'Create/Update SQLite database', errString, 'OK','','')
             logger.error( 'Error in "Create/Update SQLite database": %s' % errString )
 
