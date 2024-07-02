@@ -2,6 +2,7 @@ import os
 import re
 import sqlite3
 import logging
+import copy
 
 if not 'ExportSQLiteError' in dir():
     ExportSQLiteError = ImportError
@@ -293,8 +294,9 @@ class SQLiteDbUpdater:
                 # Case 2:
                 # only col footprint changed, only added, only removed or only moved cols
                 if (len(addedCols) * len(removedCols)) == 0:
+                    copiedOldTableInfo = copy.deepcopy( oldTableInfo )
                     restoreStrategy[tableName] = lambda self, tableRows, file, nameOfNewTable=newTableName : \
-                        SQLiteDbUpdater.restoreTableByRowCol( self, tableRows, oldTableInfo, colNamesToRestore, nameOfNewTable, file )
+                        SQLiteDbUpdater.restoreTableByRowCol( self, tableRows, copiedOldTableInfo, colNamesToRestore, nameOfNewTable, file )
                     strategy = "RowByNamedColumns(Columns added, columns removed or columns moved)"
                 # Case 3:
                 # check for renamed cols
