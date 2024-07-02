@@ -4,6 +4,7 @@ import re
 import unittest
 import sqlite3
 import copy
+import shutil
 
 # Get the current script's directory
 current_dir = os.path.dirname(os.path.abspath(__file__))# Get the parent directory by going one level up
@@ -31,7 +32,8 @@ class TestSQLiteUpdater(unittest.TestCase):
                 '"course_id" INTEGER REFERENCES kurs (id_course)' # foreign key !!
             ]
         }
-    
+        self.filePath = os.path.dirname(os.path.abspath(__file__))    
+
     def setUp(self):
         if os.path.isfile(self.dbOrigPath):
             os.remove( self.dbOrigPath )
@@ -368,6 +370,21 @@ class TestSQLiteUpdater(unittest.TestCase):
 
         self.assertEqual( self.getTableData( self.dbOrigFileName, "participant" ), 
                           participantOrigData + moreParticipantOrigData, "Participant data should not change" )
+
+    # Test errorneous data
+    @unittest.skip("skipped temporarily")
+    def test_AErrData(self):
+        sql = ""
+        with open( os.path.join( self.filePath, "PrivateTestData/test.sql"), 'r') as f:
+            sql = f.read()
+
+        # update with no changes in tabledefinition
+        origDbName = os.path.join( self.filePath, "PrivateTestData/test.sqlite")
+        tmpDbName = os.path.join( self.filePath, "PrivateTestData/testTmp.sqlite")
+        shutil.copyfile( origDbName, tmpDbName  )
+        updater = SQLiteDbUpdater.SQLiteDbUpdater( tmpDbName, sql)
+        updater.update()
+
 
 if __name__ == '__main__':
     unittest.main()
