@@ -112,14 +112,14 @@ class SQLiteDbUpdater:
                 return True
         return False
 
-    def restoreTableByRow(tableRows, newTableName, file):
+    def restoreTableByRow( self, tableRows, newTableName, file):
         for row in tableRows:
             sqlLine = 'INSERT INTO "%s" VALUES%s;' % (newTableName, row)
             sqlLine = re.sub( "None", "NULL", sqlLine)
             sqlLine += '\n'
             file.write(sqlLine.encode('utf8'))
 
-    def restoreTableByRowCol(tableRows, oldTableInfo, colNamesToRestore, newTableName, file):
+    def restoreTableByRowCol( self, tableRows, oldTableInfo, colNamesToRestore, newTableName, file):
         for row in tableRows:
             colNames = []
             values = []
@@ -138,7 +138,7 @@ class SQLiteDbUpdater:
             file.write(sqlLine.encode('utf8'))
 
     # dump data of already existing database
-    def dumpData(dbFileName, dbDumpFileName, dumpStrategy):
+    def dumpData(self, dbFileName, dbDumpFileName, dumpStrategy):
         conn = sqlite3.connect(dbFileName)
         try:
             cur = conn.cursor()
@@ -150,7 +150,7 @@ class SQLiteDbUpdater:
                     if strategy:
                         cur.execute( "select * from %s" % tableName )
                         rows = cur.fetchall()
-                        strategy(rows, f)
+                        strategy( self, rows, f)
         finally:                    
             conn.close()
 
@@ -252,8 +252,8 @@ class SQLiteDbUpdater:
             strategy = ""
             # Case 1: no columndef changed
             if oldTableInfo['byIdx'] == newTableInfo['byIdx']:
-                restoreStrategy[tableName] = lambda tableRows, file, nameOfNewTable=newTableName : \
-                    SQLiteDbUpdater.restoreTableByRow(tableRows, nameOfNewTable, file )
+                restoreStrategy[tableName] = lambda self, tableRows, file, nameOfNewTable=newTableName : \
+                    SQLiteDbUpdater.restoreTableByRow( self, tableRows, nameOfNewTable, file )
                 strategy = "RowByRow(No columns changed)"
             else:
                 self.log( "Table '%s' fingerprint has been changed, maybe data will be not restored correctly!" % tableName, logging.WARN )
@@ -293,8 +293,8 @@ class SQLiteDbUpdater:
                 # Case 2:
                 # only col footprint changed, only added, only removed or only moved cols
                 if (len(addedCols) * len(removedCols)) == 0:
-                    restoreStrategy[tableName] = lambda tableRows, file, nameOfNewTable=newTableName : \
-                        SQLiteDbUpdater.restoreTableByRowCol( tableRows, oldTableInfo, colNamesToRestore, nameOfNewTable, file )
+                    restoreStrategy[tableName] = lambda self, tableRows, file, nameOfNewTable=newTableName : \
+                        SQLiteDbUpdater.restoreTableByRowCol( self, tableRows, oldTableInfo, colNamesToRestore, nameOfNewTable, file )
                     strategy = "RowByNamedColumns(Columns added, columns removed or columns moved)"
                 # Case 3:
                 # check for renamed cols
@@ -314,8 +314,8 @@ class SQLiteDbUpdater:
                                   % ','.join( movedCols ), logging.ERROR )
                         raise ExportSQLiteError( 'Error', 'Restoring is not possible for table: %s!' % tableName)
 
-                    restoreStrategy[tableName] = lambda tableRows, file, nameOfNewTable=newTableName : \
-                        SQLiteDbUpdater.restoreTableByRow(tableRows, nameOfNewTable, file )
+                    restoreStrategy[tableName] = lambda self, tableRows, file, nameOfNewTable=newTableName : \
+                        SQLiteDbUpdater.restoreTableByRow( self, tableRows, nameOfNewTable, file )
                     strategy = "RowByRow(Columns renamed)"
                 # Case 4: added and removed are not equal and both > 0 -> Error
                 else:
@@ -335,11 +335,17 @@ class SQLiteDbUpdater:
         self.log('Update started')
         os.chdir( self.workDir )
 
+        self.log('Substitute db name in sql')
         sql = self.substituteDbNameInSql( self.createDbSql )
+
+        self.log('Fix index statements in sql')
         sql = self.fixIndexStatementsInSql( sql )
+
+        self.log('Store db creation sql file "%s"' % self.dbDefinitionFileName )
         SQLiteDbUpdater.storeSql( sql, self.dbDefinitionFileName)
 
         # create db in dbTmpFileName
+        self.log('Create db in temporary file "%s"' % self.dbTmpFileName )
         if os.path.isfile(self.dbTmpFileName):
             os.remove( self.dbTmpFileName )
         conn = sqlite3.connect(self.dbTmpFileName)
@@ -351,21 +357,30 @@ class SQLiteDbUpdater:
             cur.close()
             conn.close()
 
+        self.log( 'Retrieve new table/index/view/trigger info' )
         newDbTableInfo = SQLiteDbUpdater.getDbTableInfo( self.dbTmpFileName )
         newDbForeignIndexNames = SQLiteDbUpdater.getDbForeignIndexNames( self.dbTmpFileName )
         newDbViewNames = SQLiteDbUpdater.getDbViewNames( self.dbTmpFileName )
         newDbTriggerNames = SQLiteDbUpdater.getDbTriggerNames( self.dbTmpFileName )
+
+        self.log( 'Check new table/indiex/view/trigger names' )
         self.checkNames( newDbTableInfo, newDbForeignIndexNames, newDbViewNames, newDbTriggerNames )
 
         # backup/restore data
         if os.path.isfile(self.dbFileName):
+            self.log( 'Retrieve old table info' )
             oldDbTableInfo = SQLiteDbUpdater.getDbTableInfo( self.dbFileName )
             if SQLiteDbUpdater.containsData(oldDbTableInfo):
+                self.log( 'Backup and restore already existing db data for "%s"' % self.dbFileName )
+                self.log( 'Evaluate restore strategy for tables' )
                 restoreStrategy = self.evaluateRestoreStrategy(oldDbTableInfo, newDbTableInfo)
-                SQLiteDbUpdater.dumpData(self.dbFileName, self.dbRestoreFileName, restoreStrategy)
+                self.log( 'Dump db data to "%s"' % self.dbRestoreFileName )
+                self.dumpData(self.dbFileName, self.dbRestoreFileName, restoreStrategy)
+                self.log( 'Restore db data from: "%s" to temporary db "%s"' % (self.dbRestoreFileName, self.dbTmpFileName) )
                 SQLiteDbUpdater.restoreData(self.dbTmpFileName, self.dbRestoreFileName)
 
         # on success replace dbFileName by dbTmpFileName
+        self.log('Move data from temporary db file "%s" to "%s"' % (self.dbTmpFileName, self.dbFileName ))
         if os.path.isfile(self.dbFileName):
             os.remove( self.dbFileName )
         os.rename( self.dbTmpFileName, self.dbFileName  )
