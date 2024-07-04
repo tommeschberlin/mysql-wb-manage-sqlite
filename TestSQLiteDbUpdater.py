@@ -41,6 +41,24 @@ class TestSQLiteUpdater(unittest.TestCase):
         sql = self.getDbCreationSQL(self.tableColsSQL)
         self.executeSqlScript(self.dbOrigFileName, sql)
 
+        # create two views
+        createViewSql = 'CREATE VIEW tln_course_s as\n'\
+                        'SELECT participant.Name, course.name\n'\
+                        'FROM participant INNER JOIN course ON participant.course_id = course.id_course\n'\
+                        'WHERE (((participant.Name) Like "S%"))\n'\
+                        'ORDER BY participant.Name;'
+
+        self.executeSqlScript(self.dbOrigFileName, createViewSql)
+
+        createViewSql = 'CREATE VIEW tln_course_t as\n'\
+                        'SELECT participant.Name, course.name\n'\
+                        'FROM participant INNER JOIN course ON participant.course_id = course.id_course\n'\
+                        'WHERE (((participant.Name) Like "T%"))\n'\
+                        'ORDER BY participant.Name;'
+        
+        self.executeSqlScript(self.dbOrigFileName, createViewSql)
+
+
     def getDbCreationSQL(self, tableColsSQL ):
         sql  = 'ATTACH "%s" AS "test";\n' % self.dbOrigFileName
         sql += 'BEGIN;\n'
@@ -371,6 +389,46 @@ class TestSQLiteUpdater(unittest.TestCase):
         self.assertEqual( self.getTableData( self.dbOrigFileName, "participant" ), 
                           participantOrigData + moreParticipantOrigData, "Participant data should not change" )
 
+    # Test restoring of views
+    # @unittest.skip("skipped temporarily")
+    def test_RestoreViews(self):
+        courseOrigData, participantOrigData = self.addSomeData(self.dbOrigFileName)
+
+        self.assertEqual( len( SQLiteDbUpdater.SQLiteDbUpdater.getDbViewNames(self.dbOrigFileName)), 2,
+                          'Database "%s" should contain two views!' % self.dbOrigFileName )
+         
+        upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(self.tableColsSQL))
+        upater.update()
+
+        self.assertEqual( len( SQLiteDbUpdater.SQLiteDbUpdater.getDbViewNames(self.dbOrigFileName)), 2,
+                          'Updated database "%s" should contain two views!' % self.dbOrigFileName )
+
+    # Test renamed table
+    # @unittest.skip("skipped temporarily")
+    def test_RenamedTable(self):
+        sql = self.getDbCreationSQL(self.tableColsSQL)
+        toReplace = 'participant'
+        replacement = 'Participants'
+
+        pattern = r'"%s"' % toReplace
+        repl = r'"%s"' % replacement
+        sql = re.sub( pattern, repl, sql )
+
+        pattern = r'"%s\.' % toReplace
+        repl = r'"%s.' % replacement
+        sql = re.sub( pattern, repl, sql )
+
+        upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, sql )
+        upater.update()
+
+        self.assertEqual( len( SQLiteDbUpdater.SQLiteDbUpdater.getDbViewNames(self.dbOrigFileName)), 2,
+                          'Updated database "%s" should contain two views!' % self.dbOrigFileName )
+
+        dbTableInfo = SQLiteDbUpdater.SQLiteDbUpdater.getDbTableInfo(self.dbOrigFileName)
+
+        self.assertTrue( ( replacement in dbTableInfo.keys() ),
+                          'Table with changed name should exist in database %s!' % self.dbOrigFileName )
+
     # Test errorneous data
     @unittest.skip("skipped temporarily")
     def test_AErrData(self):
@@ -384,7 +442,6 @@ class TestSQLiteUpdater(unittest.TestCase):
         shutil.copyfile( origDbName, tmpDbName  )
         updater = SQLiteDbUpdater.SQLiteDbUpdater( tmpDbName, sql)
         updater.update()
-
 
 if __name__ == '__main__':
     unittest.main()
