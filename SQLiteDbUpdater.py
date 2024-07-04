@@ -18,6 +18,7 @@ class SQLiteDbUpdater:
         self.dbTmpFileName = self.dbFileName + "~"
         self.dbRestoreDataFileName = self.dbName + "_restore.sql"
         self.dbRestoreViewsFileName = self.dbName + "_restoreViews.sql"
+        self.dbOrigDefinitionFileName =  self.dbName + "_orig_definition.sql"
         self.dbDefinitionFileName =  self.dbName + "_definition.sql"
         self.confirmRequestCallback = None
         self.workDir = os.path.dirname( dbPath )
@@ -433,6 +434,9 @@ class SQLiteDbUpdater:
         self.log('Update started')
         os.chdir( self.workDir )
 
+        self.log('Store original db definition sql file "%s"' % self.dbOrigDefinitionFileName )
+        SQLiteDbUpdater.storeSql( sql, self.dbOrigDefinitionFileName)
+
         self.log('Substitute db name in sql')
         sql = self.substituteDbNameInSql( self.createDbSql )
 
@@ -442,7 +446,7 @@ class SQLiteDbUpdater:
         self.log('Change DECIMAL to NUMERIC statements in sql')
         sql = self.changeDecimalToNumericInSql( sql )
 
-        self.log('Store db creation sql file "%s"' % self.dbDefinitionFileName )
+        self.log('Store db updated/adapted creation sql file "%s"' % self.dbDefinitionFileName )
         SQLiteDbUpdater.storeSql( sql, self.dbDefinitionFileName)
 
         # create db in dbTmpFileName
