@@ -450,7 +450,7 @@ class SQLiteDbUpdater:
         newDbViewNames = SQLiteDbUpdater.getDbViewNames( self.dbTmpFileName )
         newDbTriggerNames = SQLiteDbUpdater.getDbTriggerNames( self.dbTmpFileName )
 
-        self.log( 'Check new table/indiex/view/trigger names' )
+        self.log( 'Check new table/index/view/trigger names' )
         self.checkNames( newDbTableInfo, newDbForeignIndexNames, newDbViewNames, newDbTriggerNames )
 
         # backup/restore data

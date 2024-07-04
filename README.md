@@ -33,8 +33,12 @@ The **SQLiteDbUpdater** tries to keep your existing table data, but SQLite can n
    Works fine for all unchanged tables of your database
 2) **Copy rows column by column matching their names**  
    Matches the column names of changed tables and puts the data in. Thus you can alter table defintions by adding, moving or removing table columns.
-3) **Copy complete rows even when columnames has changed **  
+3) **Copy complete rows even when columnames has changed**  
    Check if column names have changed, but not their order at all. Data of columns with changed column name will be kept.
+4) **Indexing**
+   Indicees in existing database will not be considered, because all indicees should come from the workbench model
+5) **Views**
+   Views in existing databas will be restored, renamed tablenames and columnnames will be detected and adapted (hopefully)
 
 ## Restrictions / Problems
 
