@@ -264,6 +264,17 @@ class SQLiteDbUpdater:
         sql = re.sub( pattern, repl, sql )
         return sql
 
+    # because we want to use it in MS Access, indexname should not contain '.'
+    def changeDecimalToNumericInSql(self, sql):
+        pattern = r' +DECIMAL\(([^\(\)]+)\)'
+        repl = r' NUMERIC(\1)'
+        sql = re.sub( pattern, repl, sql )
+
+        pattern = r' +DECIMAL( |\))+'
+        repl = r' NUMERIC(5,2)\1'
+        sql = re.sub( pattern, repl, sql )
+        return sql
+    
     def nameValid( self, name ):
         return re.search( "^[%s]*$" % self.allowedCharacters, name ) != None
 
@@ -427,6 +438,9 @@ class SQLiteDbUpdater:
 
         self.log('Fix index statements in sql')
         sql = self.fixIndexStatementsInSql( sql )
+
+        self.log('Change DECIMAL to NUMERIC statements in sql')
+        sql = self.changeDecimalToNumericInSql( sql )
 
         self.log('Store db creation sql file "%s"' % self.dbDefinitionFileName )
         SQLiteDbUpdater.storeSql( sql, self.dbDefinitionFileName)

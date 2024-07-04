@@ -206,7 +206,6 @@ class TestSQLiteUpdater(unittest.TestCase):
 
         self.assertEqual( participantData, expectedParticipantData, "Participant should have one more column with None data" )
 
-
     # Test evaluateRestoreStrategy Case 2: RowByNamedColumns(Columns added, columns removed or columns moved)
     # @unittest.skip("skipped temporarily")
     def test_RestoreRowByNamedColumnsStrategy_columns_removed(self):
@@ -428,6 +427,28 @@ class TestSQLiteUpdater(unittest.TestCase):
 
         self.assertTrue( ( replacement in dbTableInfo.keys() ),
                           'Table with changed name should exist in database %s!' % self.dbOrigFileName )
+
+
+    # Test DECIMAL to NUMERIC conversion
+    # @unittest.skip("skipped temporarily")
+    def test_DecimalToNumericConversion(self):
+        self.addSomeData(self.dbOrigFileName)
+
+        # add cols to participant
+        tableColsSQL = copy.deepcopy(self.tableColsSQL)
+        tableColsSQL['course'].append( '"refund" DECIMAL(4,2)' )
+        tableColsSQL['course'].append( '"cost" DECIMAL' )
+        upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
+        upater.update()
+
+        dbTableInfo = SQLiteDbUpdater.SQLiteDbUpdater.getDbTableInfo(self.dbOrigFileName)
+        tableInfoCourse = dbTableInfo['course']
+        
+        type = tableInfoCourse['byName']['cost']['type']
+        self.assertEqual( type, 'NUMERIC(5,2)', "DECIMAL should be converted to NUMERIC(5,2)" )
+
+        type = tableInfoCourse['byName']['refund']['type']
+        self.assertEqual( type, 'NUMERIC(4,2)', "DECIMAL(4,2) should be converted to NUMERIC(4,2)" )
 
     # Test errorneous data
     @unittest.skip("skipped temporarily")
