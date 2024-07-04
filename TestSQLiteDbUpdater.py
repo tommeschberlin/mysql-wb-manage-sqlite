@@ -443,7 +443,7 @@ class TestSQLiteUpdater(unittest.TestCase):
 
         dbTableInfo = SQLiteDbUpdater.SQLiteDbUpdater.getDbTableInfo(self.dbOrigFileName)
         tableInfoCourse = dbTableInfo['course']
-        
+
         type = tableInfoCourse['byName']['cost']['type']
         self.assertEqual( type, 'NUMERIC(5,2)', "DECIMAL should be converted to NUMERIC(5,2)" )
 

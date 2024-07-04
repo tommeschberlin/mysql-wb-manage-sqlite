@@ -180,7 +180,8 @@ class SQLiteDbUpdater:
                     if strategy:
                         cur.execute( "select * from %s" % tableName )
                         rows = cur.fetchall()
-                        strategy( self, rows, f)
+                        if len(rows):
+                            strategy( self, rows, f )
         finally:                    
             conn.close()
 
@@ -384,9 +385,8 @@ class SQLiteDbUpdater:
                 # Case 2:
                 # only col footprint changed, only added, only removed or only moved cols
                 if (len(addedCols) * len(removedCols)) == 0:
-                    copiedOldTableInfo = copy.deepcopy( oldTableInfo )
-                    restoreStrategy[oldTableName] = lambda self, tableRows, file, nameOfNewTable=newTableName : \
-                        SQLiteDbUpdater.restoreTableByRowCol( self, tableRows, copiedOldTableInfo, colNamesToRestore, nameOfNewTable, file )
+                    restoreStrategy[oldTableName] = lambda self, tableRows, file, tableInfo=copy.deepcopy(oldTableInfo), colNames=colNamesToRestore, nameOfNewTable=newTableName : \
+                        SQLiteDbUpdater.restoreTableByRowCol( self, tableRows, tableInfo, colNames, nameOfNewTable, file )
                     strategy = "RowByNamedColumns(Columns added, columns removed or columns moved)"
                 # Case 3:
                 # check for renamed cols
@@ -435,7 +435,7 @@ class SQLiteDbUpdater:
         os.chdir( self.workDir )
 
         self.log('Store original db definition sql file "%s"' % self.dbOrigDefinitionFileName )
-        SQLiteDbUpdater.storeSql( sql, self.dbOrigDefinitionFileName)
+        SQLiteDbUpdater.storeSql( self.createDbSql, self.dbOrigDefinitionFileName)
 
         self.log('Substitute db name in sql')
         sql = self.substituteDbNameInSql( self.createDbSql )
