@@ -252,7 +252,7 @@ class SQLiteDbUpdater:
         pattern = r"ATTACH \"([^\"]+)\" AS \"([^\";]+)\""
         match = re.search(pattern, sql)
         if match is None:
-            raise ExportSQLiteError( 'Error', 'Cant find ATTACH pattern in SQL' )
+            raise ExportSQLiteError( 'Error', 'Cant find ATTACH pattern in SQL!' )
         prevDbName = match.group(2)
         sql = re.sub(pattern, "ATTACH \"%s\" AS \"%s\"" %(self.dbTmpFileName,self.dbName), sql)
         sql = re.sub( "\"" +  prevDbName + "\"\\.", "\"" + self.dbName + "\".", sql)

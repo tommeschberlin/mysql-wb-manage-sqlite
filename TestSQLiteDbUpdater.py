@@ -157,20 +157,19 @@ class TestSQLiteUpdater(unittest.TestCase):
 
     # Test test_substituteDbNameInSql with errornous userdata
     # @unittest.skip("skipped temporarily")
-    def test_substituteDbNameInSql(self):
-        sql = '-- Schema: Auftraggebersicht Wartungsplanung\n' +\
-              'ATTACH "Auftraggebersicht Wartungsplanung.sdb" AS "Auftraggebersicht Wartungsplanung";\n' +\
-              'BEGIN;\n'
-        updater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(self.tableColsSQL))
-        # should not raise an exception
-        success = False
-        try:
-            updater.substituteDbNameInSql( sql )
-            success = True
-        except Exception as e:
-            None
+    def test_ExceptionInSubstituteDbNameInSql(self):
+        sql = self.getDbCreationSQL(self.tableColsSQL)
+        # remove ATTACH line
+        sql = re.sub( r'ATTACH[^\n]*\n', r'', sql )
 
-        self.assertTrue( success, "substituteDbNameInSql should work in this example" )
+        upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, sql)
+        try:
+            upater.update()
+        except ImportError as e:
+            self.assertEqual(e.args[1], 'Cant find ATTACH pattern in SQL!')
+            return
+
+        self.assertTrue(False, 'Should have instead an exception here!')
 
     # Test evaluateRestoreStrategy Case 1: RowByRow(No columns changed)
     # @unittest.skip("skipped temporarily")
@@ -301,9 +300,13 @@ class TestSQLiteUpdater(unittest.TestCase):
         tableColsSQL['participant'] = colsParticipant
 
         upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
-
-        with self.assertRaises( ImportError ):
+        try:
             upater.update()
+        except ImportError as e:
+            self.assertEqual(e.args[1], 'Restoring is not possible for table: participant!')
+            return
+
+        self.assertTrue(False, 'Should have instead an exception here!')
 
     # Test evaluateRestoreStrategy Case 4: added and removed are not equal and both > 0 -> Error
     # @unittest.skip("skipped temporarily")
@@ -316,8 +319,13 @@ class TestSQLiteUpdater(unittest.TestCase):
         # add participant col -> 1 added ( in sum 2 added 1 removed)
         tableColsSQL['participant'].append( '"NewColumn" VARCHAR(45)' )
         upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
-        with self.assertRaises( ImportError ):
+        try:
             upater.update()
+        except ImportError as e:
+            self.assertEqual(e.args[1], 'Restoring is not possible for table: participant!')
+            return
+
+        self.assertTrue(False, 'Should have instead an exception here!')
 
     # @unittest.skip("skipped temporarily")
     def test_fixIndexStatementsInSql(self):
@@ -367,8 +375,13 @@ class TestSQLiteUpdater(unittest.TestCase):
         ]
         
         upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
-        with self.assertRaises( ImportError ):
+        try:
             upater.update()
+        except ImportError as e:
+            self.assertEqual(e.args[1], 'Columname "wrongüname" of table "wrongCols1" contains not allowed characters! Allowed are: "a-zA-Z0-9+-_"')
+            return
+
+        self.assertTrue(False, 'Should have instead an exception here!')
 
     # Test evaluateRestoreStrategy Case 1: RowByRow(No columns changed)
     # @unittest.skip("skipped temporarily")
