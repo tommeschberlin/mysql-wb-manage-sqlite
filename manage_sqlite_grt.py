@@ -326,22 +326,30 @@ def exportSQLite(cat):
             out.write('\n')
 
     def order_tables(out, db_name, schema, unordered, respect_deferredness):
+        if len(unordered) == 0:
+            return
         have_ordered = False
-        while not have_ordered:
-            if len(unordered) == 0:
+        for tbl in list(unordered.values()):
+            has_forward_reference = False
+            for fkey in tbl.foreignKeys:
+                if (fkey.referencedTable.name in unordered and
+                        fkey.referencedTable.name != tbl.name and not (
+                            respect_deferredness and is_deferred(fkey))):
+                    has_forward_reference = True
+                    break
+            if not has_forward_reference:
+                export_table(out, db_name, schema, tbl)
+                del unordered[tbl.name]
                 have_ordered = True
+
+        if not have_ordered and respect_deferredness:
+            tableNames = []
             for tbl in list(unordered.values()):
-                has_forward_reference = False
-                for fkey in tbl.foreignKeys:
-                    if (fkey.referencedTable.name in unordered and
-                            fkey.referencedTable.name != tbl.name and not (
-                                respect_deferredness and is_deferred(fkey))):
-                        has_forward_reference = True
-                        break
-                if not has_forward_reference:
-                    export_table(out, db_name, schema, tbl)
-                    del unordered[tbl.name]
-                    have_ordered = True
+                tableNames.append( tbl.name )
+            raise ExportSQLiteError(
+                'Error', 
+                'Found circular reference in tables: %s, please remove or use "defer" '
+                'in comment of one of the circular referencing foreign keys!' % ', '.join(tableNames))
 
     def export_schema(out, schema, is_main_schema):
         if len(schema.tables) == 0:
@@ -464,7 +472,7 @@ def exportSQLite(cat):
         for schema in [(s, s.name == 'main') for s in cat.schemata]:
             export_schema(out, schema[0], schema[1])
     except ExportSQLiteError as e:
-        grt.modules.Workbench.confirm(e.typ, e.message)
+        mforms.Utilities.show_error( 'Error in export schema', e.message, 'OK','','')
         return 1
 
     sql_text = out.getvalue()
