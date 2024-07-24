@@ -571,6 +571,7 @@ class ExportSQLiteWizard_PreviewPage(WizardPage):
         formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s', '%H:%M:%S')
         ch.setFormatter(formatter)
         
+        currentDir = os.getcwd()
         try:
             updater = SQLiteDbUpdater.SQLiteDbUpdater( path, sql )
             logger = updater.enableLogging()
@@ -584,6 +585,7 @@ class ExportSQLiteWizard_PreviewPage(WizardPage):
 
         self.log_text.set_text( logBuffer.getvalue() )
         logBuffer.close()
+        os.chdir( currentDir )
 
 class ExportSQLiteWizard(WizardForm):
     def __init__(self, sql_text):
