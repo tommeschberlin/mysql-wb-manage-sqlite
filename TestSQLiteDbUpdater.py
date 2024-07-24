@@ -450,18 +450,35 @@ class TestSQLiteUpdater(unittest.TestCase):
         # add cols to participant
         tableColsSQL = copy.deepcopy(self.tableColsSQL)
         tableColsSQL['course'].append( '"refund" DECIMAL(4,2)' )
-        tableColsSQL['course'].append( '"cost" DECIMAL' )
+        tableColsSQL['course'].append( '"cost1" DECIMAL' )
+        tableColsSQL['course'].append( '"cost2" DECIMAL' )
         upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
         upater.update()
 
         dbTableInfo = SQLiteDbUpdater.SQLiteDbUpdater.getDbTableInfo(self.dbOrigFileName)
         tableInfoCourse = dbTableInfo['course']
 
-        type = tableInfoCourse['byName']['cost']['type']
+        type = tableInfoCourse['byName']['cost1']['type']
+        self.assertEqual( type, 'NUMERIC(5,2)', "DECIMAL should be converted to NUMERIC(5,2)" )
+
+        type = tableInfoCourse['byName']['cost2']['type']
         self.assertEqual( type, 'NUMERIC(5,2)', "DECIMAL should be converted to NUMERIC(5,2)" )
 
         type = tableInfoCourse['byName']['refund']['type']
         self.assertEqual( type, 'NUMERIC(4,2)', "DECIMAL(4,2) should be converted to NUMERIC(4,2)" )
+
+    # Test for schema count
+    # @unittest.skip("skipped temporarily")
+    def test_DenyMoreThanOneSchema(self):
+        sql = self.getDbCreationSQL(self.tableColsSQL)
+        sql += 'ATTACH "another_test" AS "test";\n'
+        upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, sql)
+        try:
+            upater.update()
+        except ImportError as e:
+            self.assertEqual(e.args[1], "Only one schema per database allowed, but 2 found (['test.sqlite', 'another_test'])!")
+            return
+        self.assertTrue(False, 'Should have instead an exception here!')
 
     # Test errorneous data
     @unittest.skip("skipped temporarily")
@@ -476,6 +493,7 @@ class TestSQLiteUpdater(unittest.TestCase):
         shutil.copyfile( origDbName, tmpDbName  )
         updater = SQLiteDbUpdater.SQLiteDbUpdater( tmpDbName, sql)
         updater.update()
+
 
 if __name__ == '__main__':
     unittest.main()

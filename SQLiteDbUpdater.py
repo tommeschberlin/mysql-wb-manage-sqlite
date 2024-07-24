@@ -249,6 +249,11 @@ class SQLiteDbUpdater:
 
     # replace the dbname with the choosen filename stem                
     def substituteDbNameInSql(self, sql):
+        pattern = r"ATTACH \"([^\"]+)\""
+        schemata = re.findall(pattern, sql)
+        if len(schemata) > 1:
+            raise ExportSQLiteError( 'Error', 'Only one schema per database allowed, but %s found (%s)!' % (len(schemata), schemata) )
+        
         pattern = r"ATTACH \"([^\"]+)\" AS \"([^\";]+)\""
         match = re.search(pattern, sql)
         if match is None:
@@ -272,7 +277,7 @@ class SQLiteDbUpdater:
         repl = r' NUMERIC(\1)'
         sql = re.sub( pattern, repl, sql )
 
-        pattern = r' +DECIMAL( |\))+'
+        pattern = r' +DECIMAL(,| |\))+'
         repl = r' NUMERIC(5,2)\1'
         sql = re.sub( pattern, repl, sql )
         return sql
