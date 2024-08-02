@@ -145,7 +145,11 @@ class SQLiteDbUpdater:
             colInfo = oldTableInfo['byName'][colName]
             oldColIdxByName[colName] = colInfo['cid']
 
-        sql = 'INSERT INTO "%s"(%s) VALUES\n' % (newTableName, ','.join(colNamesToRestore) )
+        quotedColNamesToRestore = []
+        for colName in colNamesToRestore:
+            quotedColNamesToRestore.append('"%s"' % colName)
+
+        sql = 'INSERT INTO "%s"(%s) VALUES\n' % (newTableName, ','.join(quotedColNamesToRestore) )
         file.write(sql.encode('utf8'))
 
         sqlLines = []

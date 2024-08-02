@@ -5,6 +5,7 @@ import unittest
 import sqlite3
 import copy
 import shutil
+import tempfile
 
 # Get the current script's directory
 current_dir = os.path.dirname(os.path.abspath(__file__))# Get the parent directory by going one level up
@@ -16,7 +17,7 @@ import SQLiteDbUpdater
 class TestSQLiteUpdater(unittest.TestCase):
     def __init__(self, methodName: str = "runTest") -> None:
         super().__init__(methodName)
-        self.workDir = os.path.join( 'c:/', 'tmp' )
+        self.workDir = tempfile.gettempdir()
         if not os.path.exists( self.workDir ):
             raise Exception( 'Error', 'No workDir \"%s\" found!' % self.workDir )
         self.dbOrigName = "test"
@@ -479,6 +480,25 @@ class TestSQLiteUpdater(unittest.TestCase):
             self.assertEqual(e.args[1], "Only one schema per database allowed, but 2 found (['test.sqlite', 'another_test'])!")
             return
         self.assertTrue(False, 'Should have instead an exception here!')
+
+    # Test for keywords in names
+    # @unittest.skip("skipped temporarily")
+    def test_TestKeywordsInNames(self):
+        self.addSomeData(self.dbOrigFileName)
+
+        # add cols to participant, with a sql keyword
+        tableColsSQL = copy.deepcopy(self.tableColsSQL)
+        tableColsSQL['course'].append( '"Alter" INT' )
+        upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
+        upater.update()
+
+        tableColsSQL['course'].append( '"NewCol" INT' )
+        upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
+        try:
+            upater.update()
+        except sqlite3.OperationalError as e:
+            self.assertTrue(False, "No error on sql keyword in column name if restoring datadatabase expected!")
+            return
 
     # Test errorneous data
     @unittest.skip("skipped temporarily")
