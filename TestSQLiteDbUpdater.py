@@ -164,13 +164,13 @@ class TestSQLiteUpdater(unittest.TestCase):
         sql = re.sub( r'ATTACH[^\n]*\n', r'', sql )
 
         upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, sql)
+        exceptionText = ''
         try:
             upater.update()
         except ImportError as e:
-            self.assertEqual(e.args[1], 'Cant find ATTACH pattern in SQL!')
-            return
+            exceptionText = e.args[1]
 
-        self.assertTrue(False, 'Should have instead an exception here!')
+        self.assertEqual(exceptionText, 'Cant find ATTACH pattern in SQL!')
 
     # Test evaluateRestoreStrategy Case 1: RowByRow(No columns changed)
     # @unittest.skip("skipped temporarily")
@@ -301,13 +301,13 @@ class TestSQLiteUpdater(unittest.TestCase):
         tableColsSQL['participant'] = colsParticipant
 
         upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
+        exceptionText = ''
         try:
             upater.update()
         except ImportError as e:
-            self.assertEqual(e.args[1], 'Restoring is not possible for table: participant!')
-            return
+            exceptionText = e.args[1]
 
-        self.assertTrue(False, 'Should have instead an exception here!')
+        self.assertEqual(exceptionText, 'Restoring is not possible for table: participant!')
 
     # Test evaluateRestoreStrategy Case 4: added and removed are not equal and both > 0 -> Error
     # @unittest.skip("skipped temporarily")
@@ -320,13 +320,13 @@ class TestSQLiteUpdater(unittest.TestCase):
         # add participant col -> 1 added ( in sum 2 added 1 removed)
         tableColsSQL['participant'].append( '"NewColumn" VARCHAR(45)' )
         upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
+        exceptionText = ''
         try:
             upater.update()
         except ImportError as e:
-            self.assertEqual(e.args[1], 'Restoring is not possible for table: participant!')
-            return
+            exceptionText = e.args[1]
 
-        self.assertTrue(False, 'Should have instead an exception here!')
+        self.assertEqual(exceptionText, 'Restoring is not possible for table: participant!')
 
     # @unittest.skip("skipped temporarily")
     def test_fixIndexStatementsInSql(self):
@@ -376,13 +376,13 @@ class TestSQLiteUpdater(unittest.TestCase):
         ]
         
         upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
+        exceptionText = ''
         try:
             upater.update()
         except ImportError as e:
-            self.assertEqual(e.args[1], 'Columname "wrongüname" of table "wrongCols1" contains not allowed characters! Allowed are: "a-zA-Z0-9+-_"')
-            return
-
-        self.assertTrue(False, 'Should have instead an exception here!')
+            exceptionText = e.args[1]
+            
+        self.assertEqual(exceptionText, 'Columname "wrongüname" of table "wrongCols1" contains not allowed character "ü"! Allowed are: "a-zA-Z0-9+-_"')
 
     # Test evaluateRestoreStrategy Case 1: RowByRow(No columns changed)
     # @unittest.skip("skipped temporarily")
@@ -474,12 +474,13 @@ class TestSQLiteUpdater(unittest.TestCase):
         sql = self.getDbCreationSQL(self.tableColsSQL)
         sql += 'ATTACH "another_test" AS "test";\n'
         upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, sql)
+        exceptionText = ''
         try:
             upater.update()
         except ImportError as e:
-            self.assertEqual(e.args[1], "Only one schema per database allowed, but 2 found (['test.sqlite', 'another_test'])!")
-            return
-        self.assertTrue(False, 'Should have instead an exception here!')
+            exceptionText = e.args[1]
+
+        self.assertEqual(exceptionText, "Only one schema per database allowed, but 2 found (['test.sqlite', 'another_test'])!")
 
     # Test for keywords in names
     # @unittest.skip("skipped temporarily")
@@ -499,6 +500,34 @@ class TestSQLiteUpdater(unittest.TestCase):
         except sqlite3.OperationalError as e:
             self.assertTrue(False, "No error on sql keyword in column name if restoring datadatabase expected!")
             return
+
+    # Test for wrong characters
+    # @unittest.skip("skipped temporarily")
+    def test_TestForWrongCharactersInNames(self):
+        self.addSomeData(self.dbOrigFileName)
+
+        # add new cols
+        tableColsSQL = copy.deepcopy(self.tableColsSQL)
+        tableColsSQL['course'].append( '"Col/WithSlash" INT' )
+        upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
+        exceptionText = ''
+        try:
+            upater.update()
+        except ImportError as e:
+            exceptionText = e.args[1]
+            
+        self.assertEqual(exceptionText, 'Columname "Col/WithSlash" of table "course" contains not allowed character "/"! Allowed are: "a-zA-Z0-9+-_"')
+
+        # add new cols
+        tableColsSQL = copy.deepcopy(self.tableColsSQL)
+        tableColsSQL['course'].append( '"Col.WithDot" INT' )
+        upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
+        try:
+            upater.update()
+        except ImportError as e:
+            exceptionText = e.args[1]
+            
+        self.assertEqual(exceptionText, 'Columname "Col.WithDot" of table "course" contains not allowed character "."! Allowed are: "a-zA-Z0-9+-_"')
 
     # Test errorneous data
     @unittest.skip("skipped temporarily")

@@ -2,8 +2,6 @@
   * what about views of changed tables definition
   * tests for it
 
-6: 2024-07-31 '/' und '.' in name was not found by check
-
 7: 2024-08-01 Overwrite Message -> Update Message
 
 8: 2024-08-01 Datentyp Date -> Datetime, Bit -> INT
@@ -13,6 +11,8 @@
 ________________________________________________________________________________
 
 # Solved
+
+6: 2024-07-31 '/' und '.' in name was not found by check
 
 5: 2024-08-02 Keywords in table column names
   * Problems with "Alter" as col name, was recognized as sql keyword, at restore of table data with rowCol strategy

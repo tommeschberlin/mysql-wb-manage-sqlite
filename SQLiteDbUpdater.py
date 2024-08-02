@@ -286,31 +286,46 @@ class SQLiteDbUpdater:
         sql = re.sub( pattern, repl, sql )
         return sql
     
-    def nameValid( self, name ):
-        return re.search( "^[%s]*$" % self.allowedCharacters, name ) != None
+    def hasWrongCharacter( self, name ):
+        # regex will not find '/' and '.'
+        if name.count('/') == 0 and name.count('.') == 0 \
+           and re.search( "^[%s]*$" % self.allowedCharacters, name ) != None:
+            return ''
+
+        for char in name:
+            if re.match( "[%s]+" % self.allowedCharacters, char ) == None \
+                or char.count('/') > 0 or char.count('.') > 0:
+                return char
+
+        raise ExportSQLiteError( 'Error', 'Detected wrong charactar, but cant identify, should never appear!' )
 
     # check tablenames, columnames for usable characters    
     def checkNames( self, dbTableInfo, dbForeignIndexNames, dbViewNames, dbTriggerNames ):
         for tableName, tableInfo in dbTableInfo.items():
-            if not self.nameValid( tableName ):
-                raise ExportSQLiteError( 'Error', 'Tablename "%s" contains not allowed characters! Allowed are: "%s"'
-                                         % ( tableName, self.allowedCharacters ) )
+            wrongChar = self.hasWrongCharacter( tableName )
+            if len(wrongChar) :
+                raise ExportSQLiteError( 'Error', 'Tablename "%s" contains not allowed character "%s"! Allowed are: "%s"'
+                                         % ( tableName, wrongChar, self.allowedCharacters ) )
             for colName, colInfo in tableInfo['byName'].items():
-                if not self.nameValid( colName ):
-                    raise ExportSQLiteError( 'Error', 'Columname "%s" of table "%s" contains not allowed characters! Allowed are: "%s"'
-                                             % (colName, tableName, self.allowedCharacters) )
+                wrongChar = self.hasWrongCharacter( colName )
+                if len(wrongChar) :
+                    raise ExportSQLiteError( 'Error', 'Columname "%s" of table "%s" contains not allowed character "%s"! Allowed are: "%s"'
+                                             % (colName, tableName, wrongChar, self.allowedCharacters) )
         for indexName in dbForeignIndexNames:
-            if not self.nameValid( indexName ):
-                raise ExportSQLiteError( 'Error', 'Indexname "%s" contains not allowed characters! Allowed are: "%s"'
-                                         % (indexName, self.allowedCharacters) )
+            wrongChar = self.hasWrongCharacter( indexName )
+            if len(wrongChar) :
+                raise ExportSQLiteError( 'Error', 'Indexname "%s" contains not allowed character "%s"! Allowed are: "%s"'
+                                         % (indexName, wrongChar, self.allowedCharacters) )
         for viewName in dbViewNames:
-            if not self.nameValid( viewName ):
-                raise ExportSQLiteError( 'Error', 'Viewname "%s" contains not allowed characters! Allowed are: "%s"'
-                                         % (viewName, self.allowedCharacters) )
+            wrongChar = self.hasWrongCharacter( viewName )
+            if len(wrongChar) :
+                raise ExportSQLiteError( 'Error', 'Viewname "%s" contains not allowed character "%s"! Allowed are: "%s"'
+                                         % (viewName, wrongChar, self.allowedCharacters) )
         for triggerName in dbTriggerNames:
-            if not self.nameValid( triggerName ):
-                raise ExportSQLiteError( 'Error', 'Triggername "%s" contains not allowed characters! Allowed are: "%s"'
-                                         % (triggerName, self.allowedCharacters) )
+            wrongChar = self.hasWrongCharacter( triggerName )
+            if len(wrongChar) :
+                raise ExportSQLiteError( 'Error', 'Triggername "%s" contains not allowed character "%s"! Allowed are: "%s"'
+                                         % (triggerName, wrongChar, self.allowedCharacters) )
     
     # stores sql creation script for inspection purposes, create backup of an already existing one
     def storeSql(sql, sqlFileName):
