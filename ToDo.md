@@ -4,13 +4,17 @@
 
 7: 2024-08-01 Overwrite Message -> Update Message
 
-8: 2024-08-01 Datentyp Date -> Datetime, Bit -> INT
+8: 2024-08-01 Datentyp Date -> Datetime, Bit -> INT, eventually use STRICT keyword,
+   see: https://www.sqlite.org/stricttables.html
 
-9: 2024-08-01 Wieso erlaubt Numeric Strings ?
+10: 2024-08-19 If some warnings in log, show a rollback button or some dialog to track attention
   
 ________________________________________________________________________________
 
 # Solved
+
+9: 2024-09-04 Why can have sqlite strings in numeric declared columns ?
+   SQLite has a dynamic typing, see: https://www.sqlite.org/datatype3.html
 
 6: 2024-07-31 '/' und '.' in name was not found by check
 
