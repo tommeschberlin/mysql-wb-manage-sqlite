@@ -32,16 +32,18 @@ class SQLiteDbUpdater:
 
     def enableLogging(self):
         self.logger = logging.getLogger("SQLiteDbUpdater")
-        logging.basicConfig(filename=self.logFile, filemode='wt', level=logging.DEBUG, format='%(asctime)s %(levelname)s %(message)s', datefmt='%H:%M:%S')
+        logging.basicConfig(filename=self.logFile, filemode='wt', level=logging.DEBUG,
+                            format='%(asctime)s %(levelname)s %(message)s', datefmt='%H:%M:%S')
         return self.logger
 
     def getTableInfo(cursor, tableName):
         tableInfoByColName = {}
         tableInfoByColIdx = {}
-        cursor.execute( "PRAGMA table_info(\"%s\");" % tableName )
+        cursor.execute( f'PRAGMA table_info("{tableName}");')
         info = cursor.fetchall()
         for idx,col in enumerate(info):
-            info = { 'cid': col[0], 'name': col[1], 'type': col[2], 'notnull': col[3], 'dflt_value': col[4], 'pk': col[5] }
+            info = { 'cid': col[0], 'name': col[1], 'type': col[2], 'notnull': col[3], 'dflt_value': col[4],
+                     'pk': col[5] }
             tableInfoByColIdx[idx] = info
             tableInfoByColName[col[1]] = info
 
@@ -53,13 +55,14 @@ class SQLiteDbUpdater:
         conn = sqlite3.connect(dbFileName)
         try:
             cur = conn.cursor()
-            cur.execute( "select name from sqlite_master where type='table'" )
+            cur.execute( 'select name from sqlite_master where type="table"' )
             tableNames = cur.fetchall()
             for (tableName,) in tableNames:
-                cur.execute( "select * from \"%s\"" % tableName )
+                cur.execute( f'select * from "{tableName}"' )
                 rows = cur.fetchall()
                 infoByColIdx, infoByColName = SQLiteDbUpdater.getTableInfo(cur, tableName)
-                dbTableInfo[tableName] = { 'byIdx': infoByColIdx, 'byName': infoByColName, 'containsData' : len(rows) > 0 }
+                dbTableInfo[tableName] = { 'byIdx': infoByColIdx, 'byName': infoByColName,
+                                           'containsData' : len(rows) > 0 }
         finally:
             conn.close()
         
@@ -127,12 +130,12 @@ class SQLiteDbUpdater:
         return False
 
     def restoreTableByRow( self, tableRows, newTableName, file):
-        sql = 'INSERT INTO "%s" VALUES\n' % newTableName
+        sql = f'INSERT INTO "{newTableName}" VALUES\n'
         file.write(sql.encode('utf8'))
 
         sqlLines = []
         for row in tableRows:
-            sqlLine = '%s%s' % (row,'') # creapy formatting here, to get it work
+            sqlLine = f'{row}'
             sqlLine = re.sub( "None", "NULL", sqlLine)
             sqlLines.append(sqlLine)
 
@@ -147,9 +150,9 @@ class SQLiteDbUpdater:
 
         quotedColNamesToRestore = []
         for colName in colNamesToRestore:
-            quotedColNamesToRestore.append('"%s"' % colName)
+            quotedColNamesToRestore.append(f'"{colName}"')
 
-        sql = 'INSERT INTO "%s"(%s) VALUES\n' % (newTableName, ','.join(quotedColNamesToRestore) )
+        sql = f'INSERT INTO "{newTableName}"({','.join(quotedColNamesToRestore)}) VALUES\n'
         file.write(sql.encode('utf8'))
 
         sqlLines = []
@@ -164,7 +167,7 @@ class SQLiteDbUpdater:
                 else:
                     values.append( str(row[idx]) )
             
-            sqlLine = '(%s)' % ','.join(values)
+            sqlLine = f'({','.join(values)})'
             sqlLine = re.sub( "None", "NULL", sqlLine)
             sqlLines.append(sqlLine)
 
@@ -177,12 +180,12 @@ class SQLiteDbUpdater:
         try:
             cur = conn.cursor()
             with open(dbDumpFileName, 'wb') as f:
-                cur.execute( "select name from sqlite_master where type='table'" )
+                cur.execute( 'select name from sqlite_master where type="table"' )
                 tableNames = cur.fetchall()
                 for (tableName,) in tableNames:
                     strategy = dumpStrategy.get(tableName)
                     if strategy:
-                        cur.execute( "select * from %s" % tableName )
+                        cur.execute( f'select * from {tableName}' )
                         rows = cur.fetchall()
                         if len(rows):
                             strategy( self, rows, f )
@@ -253,19 +256,20 @@ class SQLiteDbUpdater:
                 cur.close()
                 conn.close()
 
-    # replace the dbname with the choosen filename stem                
+    # replace the db-filename with the temp-db-filename
     def substituteDbNameInSql(self, sql):
         pattern = r"ATTACH \"([^\"]+)\""
         schemata = re.findall(pattern, sql)
         if len(schemata) > 1:
-            raise ExportSQLiteError( 'Error', 'Only one schema per database allowed, but %s found (%s)!' % (len(schemata), schemata) )
+            raise ExportSQLiteError( 'Error',
+                                     f'Only one schema per database allowed, but {len(schemata)} found ({schemata})!' )
         
         pattern = r"ATTACH \"([^\"]+)\" AS \"([^\";]+)\""
         match = re.search(pattern, sql)
         if match is None:
             raise ExportSQLiteError( 'Error', 'Cant find ATTACH pattern in SQL!' )
         prevDbName = match.group(2)
-        sql = re.sub(pattern, "ATTACH \"%s\" AS \"%s\"" %(self.dbTmpFileName,self.dbName), sql)
+        sql = re.sub(pattern, f'ATTACH "{self.dbTmpFileName}" AS "{self.dbName}"', sql)
         sql = re.sub( "\"" +  prevDbName + "\"\\.", "\"" + self.dbName + "\".", sql)
         return sql
 
@@ -291,11 +295,11 @@ class SQLiteDbUpdater:
     def hasWrongCharacter( self, name ):
         # regex will not find '/' and '.'
         if name.count('/') == 0 and name.count('.') == 0 \
-           and re.search( "^[%s]*$" % self.allowedCharacters, name ) != None:
+           and re.search( f'^[{self.allowedCharacters}]*$', name ) != None:
             return ''
 
         for char in name:
-            if re.match( "[%s]+" % self.allowedCharacters, char ) == None \
+            if re.match( f'[{self.allowedCharacters}]+', char ) == None \
                 or char.count('/') > 0 or char.count('.') > 0:
                 return char
 
@@ -306,28 +310,28 @@ class SQLiteDbUpdater:
         for tableName, tableInfo in dbTableInfo.items():
             wrongChar = self.hasWrongCharacter( tableName )
             if len(wrongChar) :
-                raise ExportSQLiteError( 'Error', 'Tablename "%s" contains not allowed character "%s"! Allowed are: "%s"'
-                                         % ( tableName, wrongChar, self.allowedCharacters ) )
+                raise ExportSQLiteError( 'Error', f'Tablename "{tableName}" contains not allowed character '\
+                                                  f'{wrongChar}"! Allowed are: "{self.allowedCharacters}"' )
             for colName, colInfo in tableInfo['byName'].items():
                 wrongChar = self.hasWrongCharacter( colName )
                 if len(wrongChar) :
-                    raise ExportSQLiteError( 'Error', 'Columname "%s" of table "%s" contains not allowed character "%s"! Allowed are: "%s"'
-                                             % (colName, tableName, wrongChar, self.allowedCharacters) )
+                    raise ExportSQLiteError( 'Error', f'Columname "{colName}" of table "{tableName}" contains not '\
+                            f'allowed character "{wrongChar}"! Allowed are: "{self.allowedCharacters}"' )
         for indexName in dbForeignIndexNames:
             wrongChar = self.hasWrongCharacter( indexName )
             if len(wrongChar) :
-                raise ExportSQLiteError( 'Error', 'Indexname "%s" contains not allowed character "%s"! Allowed are: "%s"'
-                                         % (indexName, wrongChar, self.allowedCharacters) )
+                raise ExportSQLiteError( 'Error', f'Indexname "{indexName}" contains not allowed character '\
+                                                  f'"{wrongChar}"! Allowed are: "{self.allowedCharacters}"' )
         for viewName in dbViewNames:
             wrongChar = self.hasWrongCharacter( viewName )
             if len(wrongChar) :
-                raise ExportSQLiteError( 'Error', 'Viewname "%s" contains not allowed character "%s"! Allowed are: "%s"'
-                                         % (viewName, wrongChar, self.allowedCharacters) )
+                raise ExportSQLiteError( 'Error', f'Viewname "{viewName}" contains not allowed character '\
+                                                  f'"{wrongChar}"! Allowed are: "{self.allowedCharacters}"' )
         for triggerName in dbTriggerNames:
             wrongChar = self.hasWrongCharacter( triggerName )
             if len(wrongChar) :
-                raise ExportSQLiteError( 'Error', 'Triggername "%s" contains not allowed character "%s"! Allowed are: "%s"'
-                                         % (triggerName, wrongChar, self.allowedCharacters) )
+                raise ExportSQLiteError( 'Error', f'Triggername "{triggerName}" contains not allowed character '\
+                                                  f'"{wrongChar}"! Allowed are: "%s"' )
     
     # stores sql creation script for inspection purposes, create backup of an already existing one
     def storeSql(sql, sqlFileName):
@@ -357,11 +361,13 @@ class SQLiteDbUpdater:
                 # check for renamed table
                 newTableName = SQLiteDbUpdater.findTableByFingerprint(oldTableInfo, newDbTableInfo)
                 if newTableName is None:
-                    info = "Table '%s' not found in new DB-schema, also not by column-fingerprint!" % oldTableName
-                    info += "If table was renamed and also has changed colums try to rename it in the first run and change columns an a second run!"
+                    info = f'Table "{oldTableName}" not found in new DB-schema, also not by column-fingerprint! '\
+                            'If table was renamed and also has changed colums try to rename it in the first run and'\
+                            ' change columns an a second run!'
                     self.log( info, logging.WARN )
                     continue
-                self.log( "Table '%s' was probably renamed, will try to restore data to table '%s!" % (oldTableName, newTableName) )
+                self.log( f'Table "{oldTableName}" was probably renamed, will try to restore data to table '\
+                          f'"{newTableName}"!')
                 newTableInfo = newDbTableInfo.get(newTableName)
                 renaming['tableNames'] = { oldTableName : newTableName }
             else:
@@ -374,7 +380,8 @@ class SQLiteDbUpdater:
                     SQLiteDbUpdater.restoreTableByRow( self, tableRows, nameOfNewTable, file )
                 strategy = "RowByRow(No columns changed)"
             else:
-                self.log( "Table '%s' fingerprint has been changed, maybe data will be not restored correctly!" % oldTableName, logging.WARN )
+                self.log( f'Table "{oldTableName}" fingerprint has been changed, maybe data will be not restored '\
+                          f'correctly!', logging.WARN )
                 # retrieving change info
                 addedCols = []
                 addedNotNullCols = []
@@ -400,26 +407,31 @@ class SQLiteDbUpdater:
                             addedNotNullCols.append(name)
 
                 if len(changedToNotNullCols) or len(addedNotNullCols):
-                    self.log( "Column(s) '%s' has been created/changed to have 'notNull' values, if restoring of data leads to problems, "
-                              "start without 'notNull' in the first run, fill in data and then change definition to 'notNull' in the second run!"
-                               % ','.join( addedNotNullCols + changedToNotNullCols ), logging.WARN )
+                    self.log( f'Column(s) "{','.join( addedNotNullCols + changedToNotNullCols )}" has been '\
+                               'created/changed to have "notNull" values, if restoring of data leads to problems, '\
+                               'start without "notNull" in the first run, fill in data and then change definition to '\
+                               '"notNull" in the second run!', logging.WARN )
 
                 if len(changedTypeCols):
-                    self.log( "Type of column(s) '%s' has been changed, if restoring of data leads to problems, "
-                              "adapt data before change the datatype!" % ','.join( changedTypeCols ), logging.WARN )
+                    self.log( f'Type of column(s) "{','.join( changedTypeCols )}" has been changed, if restoring of '\
+                               'data leads to problems, adapt data before change the datatype!', logging.WARN )
                     
                 # Case 2:
                 # only col footprint changed, only added, only removed or only moved cols
                 if (len(addedCols) * len(removedCols)) == 0:
-                    restoreStrategy[oldTableName] = lambda self, tableRows, file, tableInfo=copy.deepcopy(oldTableInfo), colNames=colNamesToRestore, nameOfNewTable=newTableName : \
-                        SQLiteDbUpdater.restoreTableByRowCol( self, tableRows, tableInfo, colNames, nameOfNewTable, file )
+                    restoreStrategy[oldTableName] = lambda self, tableRows, file, \
+                        tableInfo=copy.deepcopy(oldTableInfo), colNames=colNamesToRestore, \
+                        nameOfNewTable=newTableName : \
+                        SQLiteDbUpdater.restoreTableByRowCol(
+                            self, tableRows, tableInfo, colNames, nameOfNewTable, file )
                     strategy = "RowByNamedColumns(Columns added, columns removed or columns moved)"
                 # Case 3:
                 # check for renamed cols
                 elif len(addedCols) == len(removedCols):
-                    self.log( "Column(s) '%s' has been added and column(s) '%s' has been removed, this will be interpreted as changed col names!"
-                              "If this is leads to problems, try to reorder, rename, remove or add only one column in separate single runs!"
-                              % (','.join( addedCols ), ','.join( removedCols )), logging.WARN )
+                    self.log( f'Column(s) "{','.join( addedCols )}" has been added and column(s) '\
+                              f'"{','.join( removedCols )}" has been removed, this will be interpreted as changed col '\
+                               'names! If this is leads to problems, try to reorder, rename, remove or add only one '\
+                               'column in separate single runs!', logging.WARN )
                     # check if unchanged column names stays at same index
                     movedCols = []
                     for nameToRestore in colNamesToRestore:
@@ -427,10 +439,10 @@ class SQLiteDbUpdater:
                             movedCols.append( nameToRestore )
                     # Case 3.1: ColumnNames has been renamed and moved -> Error
                     if len(movedCols):
-                        self.log( "Column(s) '%s' has been moved to new positions!"
-                                  "Restoring is not possible, try to reorder, rename, remove or add rows in separate single runs!"
-                                  % ','.join( movedCols ), logging.ERROR )
-                        raise ExportSQLiteError( 'Error', 'Restoring is not possible for table: %s!' % oldTableName)
+                        self.log( f'Column(s) "{','.join( movedCols )}" has been moved to new positions! Restoring is '\
+                                   'not possible, try to reorder, rename, remove or add rows in separate single runs!',
+                                   logging.ERROR )
+                        raise ExportSQLiteError( 'Error', f'Restoring is not possible for table: {oldTableName}!')
 
                     restoreStrategy[oldTableName] = lambda self, tableRows, file, nameOfNewTable=newTableName : \
                         SQLiteDbUpdater.restoreTableByRow( self, tableRows, nameOfNewTable, file )
@@ -444,12 +456,13 @@ class SQLiteDbUpdater:
 
                 # Case 4: added and removed are not equal and both > 0 -> Error
                 else:
-                    self.log( "Column(s) '%s' has been added, this matches not the number of column(s) '%s' which has been removed!"
-                              "Restoring is not possible, try to reorder, rename, remove or add rows in separate single runs!"
-                              % (','.join( addedCols ), ','.join( removedCols )), logging.ERROR )
-                    raise ExportSQLiteError( 'Error', 'Restoring is not possible for table: %s!' % oldTableName)
+                    self.log( f'Column(s) "{','.join( addedCols )}" has been added, this matches not the number of '\
+                              f'column(s) "{','.join( removedCols )}" which has been removed! Restoring is not '\
+                               'possible, try to reorder, rename, remove or add rows in separate single runs!',
+                               logging.ERROR )
+                    raise ExportSQLiteError( 'Error', f'Restoring is not possible for table: {oldTableName}!')
 
-            self.log( "Dump/Restore table \"%s\" by strategy: %s" % ( oldTableName, strategy ))
+            self.log( f'Dump/Restore table "{oldTableName}" by strategy: {strategy}')
 
         return restoreStrategy,renaming
 
@@ -460,7 +473,7 @@ class SQLiteDbUpdater:
         self.log('Update started')
         os.chdir( self.workDir )
 
-        self.log('Store original db definition sql file "%s"' % self.dbOrigDefinitionFileName )
+        self.log(f'Store original db definition sql file "{self.dbOrigDefinitionFileName}"' )
         SQLiteDbUpdater.storeSql( self.createDbSql, self.dbOrigDefinitionFileName)
 
         self.log('Substitute db name in sql')
@@ -472,11 +485,11 @@ class SQLiteDbUpdater:
         self.log('Change DECIMAL to NUMERIC statements in sql')
         sql = self.changeDecimalToNumericInSql( sql )
 
-        self.log('Store db updated/adapted creation sql file "%s"' % self.dbDefinitionFileName )
+        self.log(f'Store db updated/adapted creation sql file "{self.dbDefinitionFileName}"' )
         SQLiteDbUpdater.storeSql( sql, self.dbDefinitionFileName)
 
         # create db in dbTmpFileName
-        self.log('Create db in temporary file "%s"' % self.dbTmpFileName )
+        self.log(f'Create db in temporary file "{self.dbTmpFileName}"' )
         if os.path.isfile(self.dbTmpFileName):
             os.remove( self.dbTmpFileName )
         conn = sqlite3.connect(self.dbTmpFileName)
@@ -504,10 +517,10 @@ class SQLiteDbUpdater:
             self.log( 'Evaluate restore strategy for tables' )
             restoreStrategy,renaming = self.evaluateRestoreStrategy(oldDbTableInfo, newDbTableInfo)
             if SQLiteDbUpdater.containsData(oldDbTableInfo):
-                self.log( 'Backup and restore already existing db data for "%s"' % self.dbFileName )
-                self.log( 'Dump db data to "%s"' % self.dbRestoreDataFileName )
+                self.log( 'Backup and restore already existing db data for "{self.dbFileName}"')
+                self.log( 'Dump db data to "{self.dbRestoreDataFileName}"' )
                 self.dumpData(self.dbFileName, self.dbRestoreDataFileName, restoreStrategy)
-                self.log( 'Restore db data from: "%s" to temporary db "%s"' % (self.dbRestoreDataFileName, self.dbTmpFileName) )
+                self.log('Restore db data from: "{self.dbRestoreDataFileName}" to temporary db "{self.dbTmpFileName}"')
                 SQLiteDbUpdater.restoreData(self.dbTmpFileName, self.dbRestoreDataFileName)
 
             if SQLiteDbUpdater.containsViews(self.dbFileName):
@@ -515,7 +528,7 @@ class SQLiteDbUpdater:
                 self.restoreViews(self.dbTmpFileName, self.dbRestoreViewsFileName)
 
         # on success replace dbFileName by dbTmpFileName
-        self.log('Move data from temporary db file "%s" to "%s"' % (self.dbTmpFileName, self.dbFileName ))
+        self.log('Move data from temporary db file "{self.dbTmpFileName}" to "{self.dbFileName}"')
         if os.path.isfile(self.dbFileName):
             os.remove( self.dbFileName )
         os.rename( self.dbTmpFileName, self.dbFileName  )
