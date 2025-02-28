@@ -247,6 +247,8 @@ class SQLiteDbUpdater:
             try:
                 cur.executescript(sql)
                 conn.commit()
+            except Exception as e:
+                raise ExportSQLiteError( 'Error', f'Exception on restore views: {str(e)}' )
             finally:
                 cur.close()
                 conn.close()

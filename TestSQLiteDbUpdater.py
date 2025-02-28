@@ -405,16 +405,49 @@ class TestSQLiteUpdater(unittest.TestCase):
     # Test restoring of views
     # @unittest.skip("skipped temporarily")
     def test_RestoreViews(self):
-        courseOrigData, participantOrigData = self.addSomeData(self.dbOrigFileName)
+        self.addSomeData(self.dbOrigFileName)
 
         self.assertEqual( len( SQLiteDbUpdater.SQLiteDbUpdater.getDbViewNames(self.dbOrigFileName)), 2,
                           'Database "%s" should contain two views!' % self.dbOrigFileName )
          
-        upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(self.tableColsSQL))
-        upater.update()
+        updater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(self.tableColsSQL))
+        updater.update()
 
         self.assertEqual( len( SQLiteDbUpdater.SQLiteDbUpdater.getDbViewNames(self.dbOrigFileName)), 2,
                           'Updated database "%s" should contain two views!' % self.dbOrigFileName )
+
+    # Test restoring of views with error
+    # @unittest.skip("skipped temporarily")
+    def test_RestoreViewsWithError(self):
+        self.addSomeData(self.dbOrigFileName)
+
+        self.assertEqual( len( SQLiteDbUpdater.SQLiteDbUpdater.getDbViewNames(self.dbOrigFileName)), 2,
+                          'Database "%s" should contain two views!' % self.dbOrigFileName )
+        
+        createViewSql = 'CREATE VIEW tln_course_err as\n'\
+                        'SELECT participant.Name, course.name\n'\
+                        'FROM participant INNER JOIN course ON participant.course_id = course.id_course\n'\
+                        'WHERE (((participant.Name) Like "S%"))\n'\
+                        'ORDER BY participant.Name\n'\
+                        '-- comment "Dummer Kommentar"\n;'
+        self.executeSqlScript(self.dbOrigPath, createViewSql)
+
+        createViewSql = 'CREATE VIEW tln_course_err2 as\n'\
+                        'SELECT participant.Name, course.name\n'\
+                        'FROM participant INNER JOIN course ON participant.course_id = course.id_course\n'\
+                        'WHERE (((participant.Name) Like "S%"))\n'\
+                        'ORDER BY participant.Name'
+        self.executeSqlScript(self.dbOrigPath, createViewSql)
+
+        expectedText = 'Exception on restore views: near "CREATE": syntax error'
+        exceptionText = ''
+        try:
+            updater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(self.tableColsSQL))
+            updater.update()
+        except Exception as e:
+            exceptionText = str(e)
+
+        self.assertTrue( expectedText in exceptionText, 'Update with errors in view should have errors!' )
 
     # Test renamed table
     # @unittest.skip("skipped temporarily")
