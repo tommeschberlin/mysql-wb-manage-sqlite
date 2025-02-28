@@ -372,7 +372,7 @@ class TestSQLiteUpdater(unittest.TestCase):
         tableColsSQL['wrongCols1'] = \
         [
             '"id" INTEGER PRIMARY KEY NOT NULL',
-            '"wrongüname" VARCHAR(45)'
+            '"wrong$name" VARCHAR(45)'
         ]
         
         upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
@@ -382,7 +382,7 @@ class TestSQLiteUpdater(unittest.TestCase):
         except ImportError as e:
             exceptionText = e.args[1]
             
-        self.assertEqual(exceptionText, 'Columname "wrongüname" of table "wrongCols1" contains not allowed character "ü"! Allowed are: "a-zA-Z0-9+-_"')
+        self.assertEqual(exceptionText, 'Columname "wrong$name" of table "wrongCols1" contains not allowed character "$"! Allowed are: "a-zA-Z0-9+-_ÄäÖöÜüß"')
 
     # Test evaluateRestoreStrategy Case 1: RowByRow(No columns changed)
     # @unittest.skip("skipped temporarily")
@@ -460,10 +460,6 @@ class TestSQLiteUpdater(unittest.TestCase):
         repl = r'"%s"' % replacement
         sql = re.sub( pattern, repl, sql )
 
-        pattern = r'"%s\.' % toReplace
-        repl = r'"%s.' % replacement
-        sql = re.sub( pattern, repl, sql )
-
         upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, sql )
         upater.update()
 
@@ -475,6 +471,34 @@ class TestSQLiteUpdater(unittest.TestCase):
         self.assertTrue( ( replacement in dbTableInfo.keys() ),
                           'Table with changed name should exist in database %s!' % self.dbOrigFileName )
 
+    # Test renamed table
+    # @unittest.skip("skipped temporarily")
+    def test_RenamedTableWithNoMatchingColumns(self):
+        sql = self.getDbCreationSQL(self.tableColsSQL)
+        toReplace = 'participant'
+        replacement = 'Participants'
+
+        pattern = r'"%s"' % toReplace
+        repl = r'"%s"' % replacement
+        sql = re.sub( pattern, repl, sql )
+
+        toReplace = 'id_participant'
+        replacement = 'id_participants'
+        pattern = r'"%s"' % toReplace
+        repl = r'"%s"' % replacement
+        sql = re.sub( pattern, repl, sql )
+
+        upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, sql )
+        upater.enableLogging()
+
+        exceptionString = ''
+        try:
+            upater.update()
+        except Exception as e:
+            exceptionString = str(e)
+
+        self.assertEqual( exceptionString, '(\'Error\', "Restoring is not possible for tables: [\'participant\']!")',
+                          'Changed table name and changed columnname too are in conflict' )
 
     # Test DECIMAL to NUMERIC conversion
     # @unittest.skip("skipped temporarily")
@@ -549,7 +573,7 @@ class TestSQLiteUpdater(unittest.TestCase):
         except ImportError as e:
             exceptionText = e.args[1]
             
-        self.assertEqual(exceptionText, 'Columname "Col/WithSlash" of table "course" contains not allowed character "/"! Allowed are: "a-zA-Z0-9+-_"')
+        self.assertEqual(exceptionText, 'Columname "Col/WithSlash" of table "course" contains not allowed character "/"! Allowed are: "a-zA-Z0-9+-_ÄäÖöÜüß"')
 
         # add new cols
         tableColsSQL = copy.deepcopy(self.tableColsSQL)
@@ -560,7 +584,7 @@ class TestSQLiteUpdater(unittest.TestCase):
         except ImportError as e:
             exceptionText = e.args[1]
             
-        self.assertEqual(exceptionText, 'Columname "Col.WithDot" of table "course" contains not allowed character "."! Allowed are: "a-zA-Z0-9+-_"')
+        self.assertEqual(exceptionText, 'Columname "Col.WithDot" of table "course" contains not allowed character "."! Allowed are: "a-zA-Z0-9+-_ÄäÖöÜüß"')
 
     # Test errorneous data
     @unittest.skip("skipped temporarily")

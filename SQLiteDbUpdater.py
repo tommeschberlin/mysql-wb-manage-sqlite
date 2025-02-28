@@ -24,7 +24,7 @@ class SQLiteDbUpdater:
         self.workDir = os.path.dirname( dbPath )
         self.logFile = os.path.join( self.workDir, self.dbName + ".log" )
         self.dbTableInfo = {}
-        self.allowedCharacters = 'a-zA-Z0-9+-_'
+        self.allowedCharacters = 'a-zA-Z0-9+-_ÄäÖöÜüß'
 
     def log(self, msg, level=logging.INFO):
         if self.logger:
@@ -50,7 +50,7 @@ class SQLiteDbUpdater:
         return tableInfoByColIdx, tableInfoByColName
             
     # create database info to decide later howto dump/restore data
-    def getDbTableInfo(dbFileName):
+    def getDbTableInfo(dbFileName) -> dict[str,dict]:
         dbTableInfo = {}
         conn = sqlite3.connect(dbFileName)
         try:
@@ -214,6 +214,11 @@ class SQLiteDbUpdater:
                 cur.execute( "select name, sql from sqlite_master where type='view'" )
                 views = cur.fetchall()
                 for viewName,viewSql in views:
+                    wrongChar = self.hasWrongCharacter( viewName )
+                    if len(wrongChar) :
+                        raise ExportSQLiteError( 'Error', f'View "{viewName}" contains not allowed character '\
+                                                  f'"{wrongChar}"! Allowed are: "{self.allowedCharacters}"' )
+
                     # treatment of renamed tables
                     if 'tableNames' in renaming:
                         for oldTableName,newTableName in renaming['tableNames'].items():
@@ -236,8 +241,14 @@ class SQLiteDbUpdater:
                                 pattern = r' +%s\.%s +' % (tableName, oldColName)
                                 repl = r' %s.%s ' % (tableName, newColName)
                                 viewSql = re.sub( pattern, repl, viewSql, 0, re.IGNORECASE )
+                    
+                    # treatment of viewnames with ' '
+                    if ' ' in viewName:
+                        pattern = f' +{viewName} +'
+                        repl = f' [{viewName}] '
+                        viewSql = re.sub( pattern, repl, viewSql, 0, re.IGNORECASE )
 
-                    file.write(('%s;\n\n' %viewSql).encode('utf8'))
+                    file.write((f'{viewSql};\n\n').encode('utf8'))
         finally:                    
             conn.close()
 
@@ -311,7 +322,7 @@ class SQLiteDbUpdater:
             wrongChar = self.hasWrongCharacter( tableName )
             if len(wrongChar) :
                 raise ExportSQLiteError( 'Error', f'Tablename "{tableName}" contains not allowed character '\
-                                                  f'{wrongChar}"! Allowed are: "{self.allowedCharacters}"' )
+                                                  f'"{wrongChar}"! Allowed are: "{self.allowedCharacters}"' )
             for colName, colInfo in tableInfo['byName'].items():
                 wrongChar = self.hasWrongCharacter( colName )
                 if len(wrongChar) :
@@ -346,25 +357,27 @@ class SQLiteDbUpdater:
         with open(sqlFileName, 'w') as f:
             f.write(sql)
 
-    def findTableByFingerprint(tableInfo, newDbTableInfo):
+    def findTableByFingerprint(self, tableInfo, newDbTableInfo):
+        colNames = list(tableInfo['byName'].keys())
         for newTableName, newTableInfo in newDbTableInfo.items():
-            if newTableInfo == tableInfo:
+            newColNames = list(newTableInfo['byName'].keys())
+            if newColNames == colNames:
                 return newTableName
         return None
     
     def evaluateRestoreStrategy(self, oldDbTableInfo, newDbTableInfo):
         restoreStrategy = {}
         renaming = {}
+        newTables = newDbTableInfo.keys()
+        oldTables = oldDbTableInfo.keys()
+        droppedTables = []
         for oldTableName, oldTableInfo in oldDbTableInfo.items():
             newTableInfo = newDbTableInfo.get(oldTableName)
             if newTableInfo is None:
                 # check for renamed table
-                newTableName = SQLiteDbUpdater.findTableByFingerprint(oldTableInfo, newDbTableInfo)
+                newTableName = self.findTableByFingerprint(oldTableInfo, newDbTableInfo)
                 if newTableName is None:
-                    info = f'Table "{oldTableName}" not found in new DB-schema, also not by column-fingerprint! '\
-                            'If table was renamed and also has changed colums try to rename it in the first run and'\
-                            ' change columns an a second run!'
-                    self.log( info, logging.WARN )
+                    droppedTables.append(oldTableName)
                     continue
                 self.log( f'Table "{oldTableName}" was probably renamed, will try to restore data to table '\
                           f'"{newTableName}"!')
@@ -463,6 +476,13 @@ class SQLiteDbUpdater:
                     raise ExportSQLiteError( 'Error', f'Restoring is not possible for table: {oldTableName}!')
 
             self.log( f'Dump/Restore table "{oldTableName}" by strategy: {strategy}')
+
+        if len(droppedTables) > 0 and len(newTables) == len(oldTables):
+            err = f'Possibly renamed tables "{droppedTables}" could not be assigned to new names, also not by '\
+                   'column-fingerprint! If tables were renamed and also have changed colums, try to rename tables one '\
+                   'by one, each in a single run and later change columns in a second run!'
+            self.log( err, logging.ERROR )
+            raise ExportSQLiteError( 'Error', f'Restoring is not possible for tables: {droppedTables}!')
 
         return restoreStrategy,renaming
 
