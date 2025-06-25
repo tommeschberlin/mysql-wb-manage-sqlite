@@ -407,7 +407,7 @@ def exportSQLite(cat):
         """Create safe filename from identifer"""
 
         def repl(c):
-            return ["%%%02x" % c for c in bytearray(c, 'ascii')]
+            return '.'.join("%%%02x" % c for c in bytearray(c, 'ascii'))
 
         return re.sub(r'[/\:*?"<>|%]', repl, ident)
 
@@ -580,6 +580,7 @@ class ExportSQLiteWizard_PreviewPage(WizardPage):
         ch.setFormatter(formatter)
         
         currentDir = os.getcwd()
+        logger = None
         try:
             updater = SQLiteDbUpdater.SQLiteDbUpdater( path, sql )
             logger = updater.enableLogging()
@@ -587,9 +588,11 @@ class ExportSQLiteWizard_PreviewPage(WizardPage):
             updater.update()
         except Exception as e:
             excType, value, traceback = sys.exc_info()
-            errString = 'Could not write to database "%s": %s %s (%s)' % (path, excType.__name__, str(e), traceback)
+            name = excType.__name__ if excType else 'Not retrievable databas name'
+            errString = 'Could not write to database "%s": %s %s (%s)' % (path, name, str(e), traceback)
             mforms.Utilities.show_error( 'Create/Update SQLite database', errString, 'OK','','')
-            logger.error( 'Error in "Create/Update SQLite database": %s' % errString )
+            if logger:
+                logger.error( 'Error in "Create/Update SQLite database": %s' % errString )
 
         self.log_text.set_text( logBuffer.getvalue() )
         logBuffer.close()
