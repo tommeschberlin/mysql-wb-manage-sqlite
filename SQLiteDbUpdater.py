@@ -7,9 +7,27 @@ import copy
 if not 'ExportSQLiteError' in dir():
     ExportSQLiteError = ImportError
 
+class ColInfo:
+    def __init__(self, cid : int, name : str, type: str, notNull: bool, defaultValue: str, isPrimaryKey : bool):
+        self.cid = cid
+        self.name = name
+        self.type = type
+        self.notNull = notNull
+        self.defaultValue = defaultValue
+        self.isPrimaryKey = isPrimaryKey
+
+class TableInfo:
+    def __init__(self, name : str, colInfoByIdx : dict[int, ColInfo], containsData : bool ):
+        self.name = name
+        self.containsData = containsData
+        self.colInfoByIdx = colInfoByIdx
+        self.colInfoByName : dict[str,ColInfo] = {}
+        for idx,colInfo in self.colInfoByIdx.items():
+            self.colInfoByName[colInfo.name] = colInfo
+
 class SQLiteDbUpdater:
     # create update using path for database to update/create and sql script for creating
-    def __init__(self, dbPath, createDbSql ) -> None:
+    def __init__(self, dbPath : str, createDbSql : str ) -> None:
         self.dbPath = dbPath
         self.createDbSql = createDbSql
         self.logger = None
@@ -26,7 +44,7 @@ class SQLiteDbUpdater:
         self.dbTableInfo = {}
         self.allowedCharacters = 'a-zA-Z0-9+-_ÄäÖöÜüß'
 
-    def log(self, msg, level=logging.INFO):
+    def log(self, msg : str, level : int = logging.INFO):
         if self.logger:
             self.logger.log( level, msg )
 
@@ -35,22 +53,23 @@ class SQLiteDbUpdater:
         logging.basicConfig(filename=self.logFile, filemode='wt', level=logging.DEBUG,
                             format='%(asctime)s %(levelname)s %(message)s', datefmt='%H:%M:%S')
         return self.logger
-
-    def getTableInfo(cursor, tableName):
-        tableInfoByColName = {}
-        tableInfoByColIdx = {}
+    
+    @staticmethod
+    def getTableInfo(cursor, tableName : str ):
+        colInfoByIdx : dict[int,ColInfo] = {}
+        cursor.execute( f'select * from "{tableName}"' )
+        rows = cursor.fetchall()
+        containsData = len(rows) > 0
         cursor.execute( f'PRAGMA table_info("{tableName}");')
         info = cursor.fetchall()
         for idx,col in enumerate(info):
-            info = { 'cid': col[0], 'name': col[1], 'type': col[2], 'notnull': col[3], 'dflt_value': col[4],
-                     'pk': col[5] }
-            tableInfoByColIdx[idx] = info
-            tableInfoByColName[col[1]] = info
-
-        return tableInfoByColIdx, tableInfoByColName
+            colInfo = ColInfo(col[0], col[1], col[2], col[3], col[4], col[5])
+            colInfoByIdx[idx] = colInfo
+        return TableInfo(tableName, colInfoByIdx, containsData)
             
     # create database info to decide later howto dump/restore data
-    def getDbTableInfo(dbFileName) -> dict[str,dict]:
+    @staticmethod
+    def getDbTableInfo(dbFileName : str ) -> dict[str,TableInfo]:
         dbTableInfo = {}
         conn = sqlite3.connect(dbFileName)
         try:
@@ -58,17 +77,14 @@ class SQLiteDbUpdater:
             cur.execute( 'select name from sqlite_master where type="table"' )
             tableNames = cur.fetchall()
             for (tableName,) in tableNames:
-                cur.execute( f'select * from "{tableName}"' )
-                rows = cur.fetchall()
-                infoByColIdx, infoByColName = SQLiteDbUpdater.getTableInfo(cur, tableName)
-                dbTableInfo[tableName] = { 'byIdx': infoByColIdx, 'byName': infoByColName,
-                                           'containsData' : len(rows) > 0 }
+                dbTableInfo[tableName] = SQLiteDbUpdater.getTableInfo(cur, tableName)
         finally:
             conn.close()
-        
+       
         return dbTableInfo
     
     # get fk names
+    @staticmethod
     def getDbForeignIndexNames(dbFileName):
         dbForeignIndexNames = []
         conn = sqlite3.connect(dbFileName)
@@ -83,6 +99,7 @@ class SQLiteDbUpdater:
         
         return dbForeignIndexNames
 
+    @staticmethod
     def getDbViewNames(dbFileName):
         dbViewNames = []
         conn = sqlite3.connect(dbFileName)
@@ -97,6 +114,7 @@ class SQLiteDbUpdater:
         
         return dbViewNames
 
+    @staticmethod
     def containsViews(dbFileName):
         conn = sqlite3.connect(dbFileName)
         viewNames = []
@@ -108,6 +126,7 @@ class SQLiteDbUpdater:
             conn.close()
         return len(viewNames) > 0
 
+    @staticmethod
     def getDbTriggerNames(dbFileName):
         dbTriggerNames = []
         conn = sqlite3.connect(dbFileName)
@@ -123,9 +142,10 @@ class SQLiteDbUpdater:
         return dbTriggerNames
 
     # check if database already contains data
-    def containsData(dbTableInfo):
+    @staticmethod
+    def containsData(dbTableInfo : dict[str,TableInfo]):
         for tableName, tableInfo in dbTableInfo.items():
-            if tableInfo['containsData']:
+            if tableInfo.containsData:
                 return True
         return False
 
@@ -142,11 +162,10 @@ class SQLiteDbUpdater:
         file.write(',\n'.join(sqlLines).encode('utf8'))
         file.write(";\n".encode('utf8'))
 
-    def restoreTableByRowCol(self, tableRows, oldTableInfo, colNamesToRestore, newTableName, file):
+    def restoreTableByRowCol(self, tableRows, oldTableInfo : TableInfo, colNamesToRestore, newTableName, file):
         oldColIdxByName = {} 
         for colName in colNamesToRestore:
-            colInfo = oldTableInfo['byName'][colName]
-            oldColIdxByName[colName] = colInfo['cid']
+            oldColIdxByName[colName] = oldTableInfo.colInfoByName[colName].cid
 
         quotedColNamesToRestore = []
         for colName in colNamesToRestore:
@@ -193,6 +212,7 @@ class SQLiteDbUpdater:
             conn.close()
 
     # restore dumped data to temporary created database
+    @staticmethod
     def restoreData( dbFileName, dbDumpFileName ):
         with open(dbDumpFileName, 'rb') as f:
             sql = f.read().decode('utf8')
@@ -206,7 +226,8 @@ class SQLiteDbUpdater:
                 conn.close()
 
     # dump views of already existing database
-    def dumpViews(self, dbFileName, dbDumpFileName, renaming):
+    def dumpViews(self, dbFileName, dbDumpFileName, renamingTableNames : dict[str,str],
+                  renamingTableCols : dict[str,dict[str,str]]):
         conn = sqlite3.connect(dbFileName)
         try:
             cur = conn.cursor()
@@ -220,8 +241,8 @@ class SQLiteDbUpdater:
                                                   f'"{wrongChar}"! Allowed are: "{self.allowedCharacters}"' )
 
                     # treatment of renamed tables
-                    if 'tableNames' in renaming:
-                        for oldTableName,newTableName in renaming['tableNames'].items():
+                    if len(renamingTableNames):
+                        for oldTableName,newTableName in renamingTableNames.items():
                             pattern = r'FROM +%s +' % oldTableName
                             repl = r'FROM %s ' % newTableName
                             viewSql = re.sub( pattern, repl, viewSql, 0, re.IGNORECASE )
@@ -235,8 +256,8 @@ class SQLiteDbUpdater:
                             viewSql = re.sub( pattern, repl, viewSql, 0, re.IGNORECASE )
 
                     # treatment of renamed table cols
-                    if 'columnNames' in renaming:
-                        for tableName,colRenaming in renaming['columnNames'].items():
+                    if len(renamingTableCols):
+                        for tableName,colRenaming in renamingTableCols.items():
                             for oldColName,newColName in colRenaming.items():
                                 pattern = r' +%s\.%s +' % (tableName, oldColName)
                                 repl = r' %s.%s ' % (tableName, newColName)
@@ -317,13 +338,13 @@ class SQLiteDbUpdater:
         raise ExportSQLiteError( 'Error', 'Detected wrong charactar, but cant identify, should never appear!' )
 
     # check tablenames, columnames for usable characters    
-    def checkNames( self, dbTableInfo, dbForeignIndexNames, dbViewNames, dbTriggerNames ):
+    def checkNames( self, dbTableInfo : dict[str,TableInfo], dbForeignIndexNames, dbViewNames, dbTriggerNames ):
         for tableName, tableInfo in dbTableInfo.items():
             wrongChar = self.hasWrongCharacter( tableName )
             if len(wrongChar) :
                 raise ExportSQLiteError( 'Error', f'Tablename "{tableName}" contains not allowed character '\
                                                   f'"{wrongChar}"! Allowed are: "{self.allowedCharacters}"' )
-            for colName, colInfo in tableInfo['byName'].items():
+            for colName, colInfo in tableInfo.colInfoByName.items():
                 wrongChar = self.hasWrongCharacter( colName )
                 if len(wrongChar) :
                     raise ExportSQLiteError( 'Error', f'Columname "{colName}" of table "{tableName}" contains not '\
@@ -345,6 +366,7 @@ class SQLiteDbUpdater:
                                                   f'"{wrongChar}"! Allowed are: "{self.allowedCharacters}"' )
     
     # stores sql creation script for inspection purposes, create backup of an already existing one
+    @staticmethod
     def storeSql(sql, sqlFileName):
         sqlTmpFileName = sqlFileName + "~"
 
@@ -357,38 +379,41 @@ class SQLiteDbUpdater:
         with open(sqlFileName, 'w') as f:
             f.write(sql)
 
-    def findTableByFingerprint(self, tableInfo, newDbTableInfo):
-        colNames = list(tableInfo['byName'].keys())
+    def findTableByFingerprint(self, tableInfo : TableInfo, newDbTableInfo : dict[str,TableInfo]) -> (str|None):
+        colNames = list(tableInfo.colInfoByName.keys())
         for newTableName, newTableInfo in newDbTableInfo.items():
-            newColNames = list(newTableInfo['byName'].keys())
+            newColNames = list(newTableInfo.colInfoByName.keys())
             if newColNames == colNames:
                 return newTableName
         return None
     
-    def evaluateRestoreStrategy(self, oldDbTableInfo, newDbTableInfo):
+    def evaluateRestoreStrategy(self, oldDbTableInfo : dict[str, TableInfo], newDbTableInfo : dict[str, TableInfo]):
         restoreStrategy = {}
-        renaming = {}
+        renamingTableNames : dict[str,str] = {}
+        renamingTableCols : dict[str,dict[str,str]] = {}
         newTables = newDbTableInfo.keys()
         oldTables = oldDbTableInfo.keys()
-        droppedTables = []
+        droppedTables : list[str] = []
         for oldTableName, oldTableInfo in oldDbTableInfo.items():
             newTableInfo = newDbTableInfo.get(oldTableName)
             if newTableInfo is None:
                 # check for renamed table
                 newTableName = self.findTableByFingerprint(oldTableInfo, newDbTableInfo)
-                if newTableName is None:
+                if not newTableName:
                     droppedTables.append(oldTableName)
                     continue
                 self.log( f'Table "{oldTableName}" was probably renamed, will try to restore data to table '\
                           f'"{newTableName}"!')
                 newTableInfo = newDbTableInfo.get(newTableName)
-                renaming['tableNames'] = { oldTableName : newTableName }
+                renamingTableNames[oldTableName] = newTableName
             else:
                 newTableName = oldTableName
 
+            assert newTableInfo
+
             strategy = ""
             # Case 1: no columndef changed
-            if oldTableInfo['byIdx'] == newTableInfo['byIdx']:
+            if oldTableInfo.colInfoByIdx == newTableInfo.colInfoByIdx:
                 restoreStrategy[oldTableName] = lambda self, tableRows, file, nameOfNewTable=newTableName : \
                     SQLiteDbUpdater.restoreTableByRow( self, tableRows, nameOfNewTable, file )
                 strategy = "RowByRow(No columns changed)"
@@ -402,21 +427,21 @@ class SQLiteDbUpdater:
                 changedToNotNullCols = []
                 removedCols = []
                 colNamesToRestore = []
-                for name,colInfo in oldTableInfo['byName'].items():
-                    if not name in newTableInfo['byName']:
+                for name,colInfo in oldTableInfo.colInfoByName.items():
+                    if not name in newTableInfo.colInfoByName.keys():
                         removedCols.append( name )
                     else:
                         colNamesToRestore.append(name)
-                        if newTableInfo['byName'][name]['type'] != colInfo['type']:
+                        if newTableInfo.colInfoByName[name].type != colInfo.type:
                             changedTypeCols.append(name)
-                        elif newTableInfo['byName'][name]['notnull'] != colInfo['notnull'] and \
-                             newTableInfo['byName'][name]['notnull'] == 1:
+                        elif newTableInfo.colInfoByName[name].notNull != colInfo.notNull and \
+                             newTableInfo.colInfoByName[name].notNull:
                             changedToNotNullCols.append(name)
 
-                for name,colInfo in newTableInfo['byName'].items():
-                    if not name in oldTableInfo['byName']:
+                for name,colInfo in newTableInfo.colInfoByName.items():
+                    if not name in oldTableInfo.colInfoByName.keys():
                         addedCols.append( name )
-                        if colInfo['notnull'] == 1:
+                        if colInfo.notNull:
                             addedNotNullCols.append(name)
 
                 if len(changedToNotNullCols) or len(addedNotNullCols):
@@ -448,7 +473,7 @@ class SQLiteDbUpdater:
                     # check if unchanged column names stays at same index
                     movedCols = []
                     for nameToRestore in colNamesToRestore:
-                        if newTableInfo['byName'][nameToRestore]['cid'] != oldTableInfo['byName'][nameToRestore]['cid']:
+                        if newTableInfo.colInfoByName[nameToRestore].cid != oldTableInfo.colInfoByName[nameToRestore].cid:
                             movedCols.append( nameToRestore )
                     # Case 3.1: ColumnNames has been renamed and moved -> Error
                     if len(movedCols):
@@ -462,10 +487,10 @@ class SQLiteDbUpdater:
                     strategy = "RowByRow(Columns renamed)"
 
                     # record renamings, for renaming in views
-                    renamingCols = {}
+                    renamingCols : dict[str,str] = {}
                     for oldToNew in list(map(lambda x,y:(x,y), removedCols, addedCols)):
                         renamingCols[oldToNew[0]] = oldToNew[1]
-                    renaming['columnNames'] = { newTableName : renamingCols }
+                    renamingTableCols[newTableName] = renamingCols
 
                 # Case 4: added and removed are not equal and both > 0 -> Error
                 else:
@@ -484,7 +509,7 @@ class SQLiteDbUpdater:
             self.log( err, logging.ERROR )
             raise ExportSQLiteError( 'Error', f'Restoring is not possible for tables: {droppedTables}!')
 
-        return restoreStrategy,renaming
+        return restoreStrategy,renamingTableNames,renamingTableCols
 
     # udpdate/create database in a most secure way
     # all updates changes will be made in a temporary created db
@@ -513,12 +538,14 @@ class SQLiteDbUpdater:
         if os.path.isfile(self.dbTmpFileName):
             os.remove( self.dbTmpFileName )
         conn = sqlite3.connect(self.dbTmpFileName)
+        cur = None
         try:        
             cur = conn.cursor()
             cur.executescript(sql)
             conn.commit()
         finally:
-            cur.close()
+            if cur:
+                cur.close()
             conn.close()
 
         self.log( 'Retrieve new table/index/view/trigger info' )
@@ -535,7 +562,8 @@ class SQLiteDbUpdater:
             self.log( 'Retrieve old table info' )
             oldDbTableInfo = SQLiteDbUpdater.getDbTableInfo( self.dbFileName )
             self.log( 'Evaluate restore strategy for tables' )
-            restoreStrategy,renaming = self.evaluateRestoreStrategy(oldDbTableInfo, newDbTableInfo)
+            restoreStrategy,renamingTableNames,renamingTableCols = \
+                self.evaluateRestoreStrategy(oldDbTableInfo, newDbTableInfo)
             if SQLiteDbUpdater.containsData(oldDbTableInfo):
                 self.log(f'Backup and restore already existing db data for "{self.dbFileName}"')
                 self.log(f'Dump db data to "{self.dbRestoreDataFileName}"' )
@@ -544,7 +572,7 @@ class SQLiteDbUpdater:
                 SQLiteDbUpdater.restoreData(self.dbTmpFileName, self.dbRestoreDataFileName)
 
             if SQLiteDbUpdater.containsViews(self.dbFileName):
-                self.dumpViews(self.dbFileName, self.dbRestoreViewsFileName, renaming )
+                self.dumpViews(self.dbFileName, self.dbRestoreViewsFileName, renamingTableNames, renamingTableCols )
                 self.restoreViews(self.dbTmpFileName, self.dbRestoreViewsFileName)
 
         # on success replace dbFileName by dbTmpFileName

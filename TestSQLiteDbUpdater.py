@@ -77,16 +77,19 @@ class TestSQLiteUpdater(unittest.TestCase):
     def executeSqlScript(self, dbFileName, sql):
         os.chdir( self.workDir )
         conn = sqlite3.connect(dbFileName)
+        cur = None
         try:        
             cur = conn.cursor()
             cur.executescript(sql)
             conn.commit()
         finally:
-            cur.close()
+            if cur: cur.close()
             conn.close()
 
     def executeSqlLine(self, dbFileName, sql):
         os.chdir( self.workDir )
+        conn = None
+        cur = None
         try:        
             conn = sqlite3.connect(dbFileName)
             cur = conn.cursor()
@@ -94,12 +97,13 @@ class TestSQLiteUpdater(unittest.TestCase):
             conn.commit()
             result = cur.fetchall()
         finally:
-            cur.close()
-            conn.close()
+            if cur: cur.close()
+            if conn: conn.close()
 
         return result
 
     def getTableData(self, dbFileName, tableName ):
+        conn = None
         try:
             os.chdir( self.workDir )
             conn = sqlite3.connect(dbFileName)
@@ -107,7 +111,7 @@ class TestSQLiteUpdater(unittest.TestCase):
             cur.execute( "PRAGMA table_info(\"%s\");" % tableName )
             info = cur.fetchall()
         finally:
-            conn.close()
+            if conn: conn.close()
 
         colNames = []
         for colInfo in info:
@@ -516,13 +520,13 @@ class TestSQLiteUpdater(unittest.TestCase):
         dbTableInfo = SQLiteDbUpdater.SQLiteDbUpdater.getDbTableInfo(self.dbOrigFileName)
         tableInfoCourse = dbTableInfo['course']
 
-        type = tableInfoCourse['byName']['cost1']['type']
+        type = tableInfoCourse.colInfoByName['cost1'].type
         self.assertEqual( type, 'NUMERIC(5,2)', "DECIMAL should be converted to NUMERIC(5,2)" )
 
-        type = tableInfoCourse['byName']['cost2']['type']
+        type = tableInfoCourse.colInfoByName['cost2'].type
         self.assertEqual( type, 'NUMERIC(5,2)', "DECIMAL should be converted to NUMERIC(5,2)" )
 
-        type = tableInfoCourse['byName']['refund']['type']
+        type = tableInfoCourse.colInfoByName['refund'].type
         self.assertEqual( type, 'NUMERIC(4,2)', "DECIMAL(4,2) should be converted to NUMERIC(4,2)" )
 
     # Test for schema count
@@ -587,7 +591,7 @@ class TestSQLiteUpdater(unittest.TestCase):
         self.assertEqual(exceptionText, 'Columname "Col.WithDot" of table "course" contains not allowed character "."! Allowed are: "a-zA-Z0-9+-_ÄäÖöÜüß"')
 
     # Test errorneous data
-    @unittest.skip("skipped temporarily")
+    # @unittest.skip("skipped temporarily")
     def test_AErrData(self):
         sql = ""
         with open( os.path.join( self.filePath, "PrivateTestData/test.sql"), 'r') as f:
