@@ -152,7 +152,7 @@ class SQLiteDbUpdater:
         for colName in colNamesToRestore:
             quotedColNamesToRestore.append(f'"{colName}"')
 
-        sql = f'INSERT INTO "{newTableName}"({','.join(quotedColNamesToRestore)}) VALUES\n'
+        sql = f'INSERT INTO "{newTableName}"({",".join(quotedColNamesToRestore)}) VALUES\n'
         file.write(sql.encode('utf8'))
 
         sqlLines = []
@@ -167,7 +167,7 @@ class SQLiteDbUpdater:
                 else:
                     values.append( str(row[idx]) )
             
-            sqlLine = f'({','.join(values)})'
+            sqlLine = f'({",".join(values)})'
             sqlLine = re.sub( "None", "NULL", sqlLine)
             sqlLines.append(sqlLine)
 
@@ -342,7 +342,7 @@ class SQLiteDbUpdater:
             wrongChar = self.hasWrongCharacter( triggerName )
             if len(wrongChar) :
                 raise ExportSQLiteError( 'Error', f'Triggername "{triggerName}" contains not allowed character '\
-                                                  f'"{wrongChar}"! Allowed are: "%s"' )
+                                                  f'"{wrongChar}"! Allowed are: "{self.allowedCharacters}"' )
     
     # stores sql creation script for inspection purposes, create backup of an already existing one
     def storeSql(sql, sqlFileName):
@@ -420,13 +420,13 @@ class SQLiteDbUpdater:
                             addedNotNullCols.append(name)
 
                 if len(changedToNotNullCols) or len(addedNotNullCols):
-                    self.log( f'Column(s) "{','.join( addedNotNullCols + changedToNotNullCols )}" has been '\
+                    self.log( f'Column(s) "{",".join( addedNotNullCols + changedToNotNullCols )}" has been '\
                                'created/changed to have "notNull" values, if restoring of data leads to problems, '\
                                'start without "notNull" in the first run, fill in data and then change definition to '\
                                '"notNull" in the second run!', logging.WARN )
 
                 if len(changedTypeCols):
-                    self.log( f'Type of column(s) "{','.join( changedTypeCols )}" has been changed, if restoring of '\
+                    self.log( f'Type of column(s) "{",".join( changedTypeCols )}" has been changed, if restoring of '\
                                'data leads to problems, adapt data before change the datatype!', logging.WARN )
                     
                 # Case 2:
@@ -441,8 +441,8 @@ class SQLiteDbUpdater:
                 # Case 3:
                 # check for renamed cols
                 elif len(addedCols) == len(removedCols):
-                    self.log( f'Column(s) "{','.join( addedCols )}" has been added and column(s) '\
-                              f'"{','.join( removedCols )}" has been removed, this will be interpreted as changed col '\
+                    self.log( f'Column(s) "{",".join( addedCols )}" has been added and column(s) '\
+                              f'"{",".join( removedCols )}" has been removed, this will be interpreted as changed col '\
                                'names! If this is leads to problems, try to reorder, rename, remove or add only one '\
                                'column in separate single runs!', logging.WARN )
                     # check if unchanged column names stays at same index
@@ -452,7 +452,7 @@ class SQLiteDbUpdater:
                             movedCols.append( nameToRestore )
                     # Case 3.1: ColumnNames has been renamed and moved -> Error
                     if len(movedCols):
-                        self.log( f'Column(s) "{','.join( movedCols )}" has been moved to new positions! Restoring is '\
+                        self.log( f'Column(s) "{",".join( movedCols )}" has been moved to new positions! Restoring is '\
                                    'not possible, try to reorder, rename, remove or add rows in separate single runs!',
                                    logging.ERROR )
                         raise ExportSQLiteError( 'Error', f'Restoring is not possible for table: {oldTableName}!')
@@ -469,8 +469,8 @@ class SQLiteDbUpdater:
 
                 # Case 4: added and removed are not equal and both > 0 -> Error
                 else:
-                    self.log( f'Column(s) "{','.join( addedCols )}" has been added, this matches not the number of '\
-                              f'column(s) "{','.join( removedCols )}" which has been removed! Restoring is not '\
+                    self.log( f'Column(s) "{",".join( addedCols )}" has been added, this matches not the number of '\
+                              f'column(s) "{",".join( removedCols )}" which has been removed! Restoring is not '\
                                'possible, try to reorder, rename, remove or add rows in separate single runs!',
                                logging.ERROR )
                     raise ExportSQLiteError( 'Error', f'Restoring is not possible for table: {oldTableName}!')
@@ -537,10 +537,10 @@ class SQLiteDbUpdater:
             self.log( 'Evaluate restore strategy for tables' )
             restoreStrategy,renaming = self.evaluateRestoreStrategy(oldDbTableInfo, newDbTableInfo)
             if SQLiteDbUpdater.containsData(oldDbTableInfo):
-                self.log( 'Backup and restore already existing db data for "{self.dbFileName}"')
-                self.log( 'Dump db data to "{self.dbRestoreDataFileName}"' )
+                self.log(f'Backup and restore already existing db data for "{self.dbFileName}"')
+                self.log(f'Dump db data to "{self.dbRestoreDataFileName}"' )
                 self.dumpData(self.dbFileName, self.dbRestoreDataFileName, restoreStrategy)
-                self.log('Restore db data from: "{self.dbRestoreDataFileName}" to temporary db "{self.dbTmpFileName}"')
+                self.log(f'Restore db data from: "{self.dbRestoreDataFileName}" to temporary db "{self.dbTmpFileName}"')
                 SQLiteDbUpdater.restoreData(self.dbTmpFileName, self.dbRestoreDataFileName)
 
             if SQLiteDbUpdater.containsViews(self.dbFileName):
@@ -548,7 +548,7 @@ class SQLiteDbUpdater:
                 self.restoreViews(self.dbTmpFileName, self.dbRestoreViewsFileName)
 
         # on success replace dbFileName by dbTmpFileName
-        self.log('Move data from temporary db file "{self.dbTmpFileName}" to "{self.dbFileName}"')
+        self.log(f'Move data from temporary db file "{self.dbTmpFileName}" to "{self.dbFileName}"')
         if os.path.isfile(self.dbFileName):
             os.remove( self.dbFileName )
         os.rename( self.dbTmpFileName, self.dbFileName  )
