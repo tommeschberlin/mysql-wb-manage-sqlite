@@ -1,8 +1,4 @@
-import os
-import re
-import sqlite3
-import logging
-import copy
+import os, re, sqlite3, logging, copy
 
 if not 'ExportSQLiteError' in dir():
     ExportSQLiteError = ImportError
@@ -16,14 +12,53 @@ class ColInfo:
         self.defaultValue = defaultValue
         self.isPrimaryKey = isPrimaryKey
 
+    def diff(self, other : 'ColInfo' ) -> list[str]:
+        diffList : list[str] = []
+        if self.cid != other.cid:
+            diffList.append(f'cid: {self.cid} <> {other.cid}')
+        if self.name != other.name:
+            diffList.append(f'name: "{self.name}" <> "{other.name}"')
+        if self.type != other.type:
+            diffList.append(f'type: "{self.type}" <> "{other.type}"')
+        if self.notNull != other.notNull:
+            diffList.append(f'notNull: {self.notNull} <> {other.notNull}')
+        if self.defaultValue != other.defaultValue:
+            diffList.append(f'defaultValue: "{self.defaultValue}" <> "{other.defaultValue}"')
+        if self.isPrimaryKey != other.isPrimaryKey:
+            diffList.append(f'isPrimaryKey: {self.isPrimaryKey} <> {other.isPrimaryKey}')
+        return diffList
+
 class TableInfo:
     def __init__(self, name : str, colInfoByIdx : dict[int, ColInfo], containsData : bool ):
         self.name = name
         self.containsData = containsData
         self.colInfoByIdx = colInfoByIdx
         self.colInfoByName : dict[str,ColInfo] = {}
-        for idx,colInfo in self.colInfoByIdx.items():
+        for idx,colInfo in sorted(self.colInfoByIdx.items()):
             self.colInfoByName[colInfo.name] = colInfo
+
+    def diff(self, other : 'TableInfo' ) -> list[str]:
+        diffList : list[str] = []
+        if self.name != other.name:
+            diffList.append(f'table name: "{self.name}" <> "{other.name}"')
+
+        names = list(self.colInfoByName.keys())
+        otherNames = list(other.colInfoByName.keys())
+        allNames = list(otherNames)
+        for name in names:
+            if not name in allNames:
+                allNames.append(name)
+
+        for colName in allNames:
+            if colName not in names:
+                diffList.append(f'col "{colName}" not in table "{self.name}"')
+            elif colName not in otherNames:
+                diffList.append(f'col "{colName}" not in table "{other.name}"')
+            else:
+                diff = self.colInfoByName[colName].diff(other.colInfoByName[colName]) 
+                if len(diff):
+                    diffList.append(f'col "{colName}": {",".join(diff)}')
+        return diffList
 
 class SQLiteDbUpdater:
     # create update using path for database to update/create and sql script for creating
@@ -413,13 +448,14 @@ class SQLiteDbUpdater:
 
             strategy = ""
             # Case 1: no columndef changed
-            if oldTableInfo.colInfoByIdx == newTableInfo.colInfoByIdx:
+            diffList = newTableInfo.diff(oldTableInfo)
+            if not len(diffList):
                 restoreStrategy[oldTableName] = lambda self, tableRows, file, nameOfNewTable=newTableName : \
                     SQLiteDbUpdater.restoreTableByRow( self, tableRows, nameOfNewTable, file )
                 strategy = "RowByRow(No columns changed)"
             else:
-                self.log( f'Table "{oldTableName}" fingerprint has been changed, maybe data will be not restored '\
-                          f'correctly!', logging.WARN )
+                self.log( f'Table "{newTableName}" fingerprint has been changed ({",".join(diffList)}), '\
+                           'maybe data will be not restored correctly!', logging.WARN )
                 # retrieving change info
                 addedCols = []
                 addedNotNullCols = []

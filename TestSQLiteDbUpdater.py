@@ -1,11 +1,4 @@
-import sys
-import os
-import re
-import unittest
-import sqlite3
-import copy
-import shutil
-import tempfile
+import sys, os, re, unittest, sqlite3, copy, shutil, tempfile, logging
 
 # Get the current script's directory
 current_dir = os.path.dirname(os.path.abspath(__file__))# Get the parent directory by going one level up
@@ -13,6 +6,15 @@ parent_dir = os.path.dirname(current_dir)# Add the parent directory to sys.path
 sys.path.append(parent_dir)
 
 import SQLiteDbUpdater
+
+class ListHandler(logging.Handler):
+    def __init__(self, logList : list[str]):
+        super().__init__()
+        self.logList = logList
+
+    def emit(self, record):
+        msg = self.format(record)
+        self.logList.append(msg)
 
 class TestSQLiteUpdater(unittest.TestCase):
     def __init__(self, methodName: str = "runTest") -> None:
@@ -33,7 +35,12 @@ class TestSQLiteUpdater(unittest.TestCase):
                 '"course_id" INTEGER REFERENCES kurs (id_course)' # foreign key !!
             ]
         }
-        self.filePath = os.path.dirname(os.path.abspath(__file__))    
+        self.filePath = os.path.dirname(os.path.abspath(__file__))
+
+        self.logMsgs = []
+        self.listHandler = ListHandler(self.logMsgs)
+        self.logger = logging.getLogger("SQLiteDbUpdater")
+        self.logger.addHandler(self.listHandler)
 
     def setUp(self):
         if os.path.isfile(self.dbOrigPath):
@@ -167,10 +174,10 @@ class TestSQLiteUpdater(unittest.TestCase):
         # remove ATTACH line
         sql = re.sub( r'ATTACH[^\n]*\n', r'', sql )
 
-        upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, sql)
+        updater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, sql)
         exceptionText = ''
         try:
-            upater.update()
+            updater.update()
         except ImportError as e:
             exceptionText = e.args[1]
 
@@ -256,8 +263,10 @@ class TestSQLiteUpdater(unittest.TestCase):
         colsParticipant.reverse()
         tableColsSQL['participant'] = colsParticipant
 
-        upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
-        upater.update()
+        updater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
+        updater.logger = self.logger
+        self.logMsgs.clear()
+        updater.update()
 
         expectedParticipantData = [{
             'course_id': 1,
@@ -514,8 +523,9 @@ class TestSQLiteUpdater(unittest.TestCase):
         tableColsSQL['course'].append( '"refund" DECIMAL(4,2)' )
         tableColsSQL['course'].append( '"cost1" DECIMAL' )
         tableColsSQL['course'].append( '"cost2" DECIMAL' )
-        upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
-        upater.update()
+        updater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
+        updater.logger = self.logger
+        updater.update()
 
         dbTableInfo = SQLiteDbUpdater.SQLiteDbUpdater.getDbTableInfo(self.dbOrigFileName)
         tableInfoCourse = dbTableInfo['course']
@@ -602,7 +612,13 @@ class TestSQLiteUpdater(unittest.TestCase):
         tmpDbName = os.path.join( self.filePath, "PrivateTestData/testTmp.sqlite")
         shutil.copyfile( origDbName, tmpDbName  )
         updater = SQLiteDbUpdater.SQLiteDbUpdater( tmpDbName, sql)
+        self.logMsgs.clear()
+        updater.logger = self.logger
         updater.update()
+
+        self.assertEqual(self.logMsgs[0], 'Table "Adresse" fingerprint has been changed (col "test" not in table "Adresse"), maybe data will be not restored correctly!')
+        self.assertEqual(self.logMsgs[1], 'Table "Gebuehr" fingerprint has been changed (col "Betrag": type: "NUMERIC(5,2)" <> "DECIMAL"), maybe data will be not restored correctly!')
+        self.assertEqual(self.logMsgs[2], 'Type of column(s) "Betrag" has been changed, if restoring of data leads to problems, adapt data before change the datatype!')
 
 
 if __name__ == '__main__':
