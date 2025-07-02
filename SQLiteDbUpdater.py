@@ -190,7 +190,13 @@ class SQLiteDbUpdater:
 
         sqlLines = []
         for row in tableRows:
-            sqlLine = f'{row}'
+            cleanedRow = []
+            for val in row:
+                if isinstance(val, str):
+                    cleanedRow.append( f"'{SQLiteDbUpdater.cleanSqlValue(val)}'" )
+                else:
+                    cleanedRow.append( str(val) )
+            sqlLine = f"({", ".join(cleanedRow)})"
             sqlLine = re.sub( "None", "NULL", sqlLine)
             sqlLines.append(sqlLine)
 
@@ -217,7 +223,7 @@ class SQLiteDbUpdater:
                 # because of reordering we have treat different by type (strings and the other types)
                 # in restoreTableByRow the list to string converter does this implicitely
                 if isinstance(row[idx], str):
-                    values.append( "\'" + row[idx] + "\'" )
+                    values.append( f"'{SQLiteDbUpdater.cleanSqlValue(row[idx])}'" )
                 else:
                     values.append( str(row[idx]) )
             
@@ -414,6 +420,20 @@ class SQLiteDbUpdater:
         with open(sqlFileName, 'w') as f:
             f.write(sql)
 
+    # escapes any single qoutes from sql text values
+    @staticmethod
+    def cleanSqlValue(value):
+        if isinstance(value, str):
+            return value.replace("'", "''")
+        return value
+    
+    @staticmethod
+    def cleanSqlRow( row : list[str]):
+        cleanedRow : list[str] = []
+        for val in row:
+           cleanedRow.append(SQLiteDbUpdater.cleanSqlValue(val))
+        return cleanedRow
+    
     def findTableByFingerprint(self, tableInfo : TableInfo, newDbTableInfo : dict[str,TableInfo]) -> (str|None):
         colNames = list(tableInfo.colInfoByName.keys())
         for newTableName, newTableInfo in newDbTableInfo.items():

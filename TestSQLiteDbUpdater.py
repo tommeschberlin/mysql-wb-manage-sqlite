@@ -5,7 +5,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))# Get the parent directo
 parent_dir = os.path.dirname(current_dir)# Add the parent directory to sys.path
 sys.path.append(parent_dir)
 
-import SQLiteDbUpdater
+from SQLiteDbUpdater import SQLiteDbUpdater
 
 class ListHandler(logging.Handler):
     def __init__(self, logList : list[str]):
@@ -160,9 +160,9 @@ class TestSQLiteUpdater(unittest.TestCase):
             values = []
             for key,value in tableRow.items():
                 if isinstance(value, str):
-                    values.append( "\'" + value + "\'" )
+                    values.append( "\'" + SQLiteDbUpdater.cleanSqlValue(value) + "\'" )
                 else:
-                    values.append( str(value) )
+                    values.append( SQLiteDbUpdater.cleanSqlValue(str(value)) )
             sqlScript += 'INSERT INTO "%s"(%s) VALUES(%s);' % (tableName, ','.join(colNames), ','.join(values) )
 
         self.executeSqlScript(dbFileName, sqlScript)
@@ -174,7 +174,7 @@ class TestSQLiteUpdater(unittest.TestCase):
         # remove ATTACH line
         sql = re.sub( r'ATTACH[^\n]*\n', r'', sql )
 
-        updater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, sql)
+        updater = SQLiteDbUpdater(self.dbOrigPath, sql)
         exceptionText = ''
         try:
             updater.update()
@@ -189,7 +189,7 @@ class TestSQLiteUpdater(unittest.TestCase):
         courseOrigData, participantOrigData = self.addSomeData(self.dbOrigFileName)
 
         # update with no changes in tabledefinition
-        updater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(self.tableColsSQL))
+        updater = SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(self.tableColsSQL))
         updater.update()
 
         self.assertEqual( self.getTableData( self.dbOrigFileName, "course" ), courseOrigData,
@@ -205,7 +205,7 @@ class TestSQLiteUpdater(unittest.TestCase):
         # add one col to participant
         tableColsSQL = copy.deepcopy(self.tableColsSQL)
         tableColsSQL['participant'].append( '"Surname" VARCHAR(45)' )
-        upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
+        upater = SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
         upater.update()
 
         self.assertEqual( self.getTableData( self.dbOrigFileName, "course" ), courseOrigData,
@@ -225,7 +225,7 @@ class TestSQLiteUpdater(unittest.TestCase):
         # add one col to participant
         tableColsSQL = copy.deepcopy( self.tableColsSQL )
         tableColsSQL['participant'].append( '"Surname" VARCHAR(45)' )
-        upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
+        upater = SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
         upater.update()
 
         participantNewData = [{
@@ -241,7 +241,7 @@ class TestSQLiteUpdater(unittest.TestCase):
         self.assertEqual( participantData[1], participantNewData[0], "Participant should have one more row/column with expected data" )
 
         # set old participant definition (without Surname col)
-        upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(self.tableColsSQL))
+        upater = SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(self.tableColsSQL))
         upater.update()
 
         expectedParticipantData = [{
@@ -263,7 +263,7 @@ class TestSQLiteUpdater(unittest.TestCase):
         colsParticipant.reverse()
         tableColsSQL['participant'] = colsParticipant
 
-        updater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
+        updater = SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
         updater.logger = self.logger
         self.logMsgs.clear()
         updater.update()
@@ -287,7 +287,7 @@ class TestSQLiteUpdater(unittest.TestCase):
         # change participant col name to Name
         tableColsSQL = copy.deepcopy( self.tableColsSQL )
         tableColsSQL['participant'][1] = '"Name" VARCHAR(45)'
-        upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
+        upater = SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
         upater.update()
 
         expectedParticipantData = [{
@@ -313,7 +313,7 @@ class TestSQLiteUpdater(unittest.TestCase):
         colsParticipant.reverse()
         tableColsSQL['participant'] = colsParticipant
 
-        upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
+        upater = SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
         exceptionText = ''
         try:
             upater.update()
@@ -321,6 +321,31 @@ class TestSQLiteUpdater(unittest.TestCase):
             exceptionText = e.args[1]
 
         self.assertEqual(exceptionText, 'Restoring is not possible for table: participant!')
+
+    # Test evaluateRestoreStrategy Case 2: RowByNamedColumns with special data
+    # @unittest.skip("skipped temporarily")
+    def test_RestoreRowByNamedColumnsStrategy_special_data(self):
+        courseOrigData, participantOrigData = self.addSomeData(self.dbOrigFileName)
+
+        participantNewData = [{
+            'id_participant':2,
+            'name':'tom\'s',
+            'course_id': 1
+        }]
+        self.addTableData( self.dbOrigFileName, 'participant', participantNewData )
+
+        participantData = self.getTableData( self.dbOrigFileName, "participant" )
+
+        self.assertEqual( participantData[1], participantNewData[0], "Participant should have one more row/column with expected data" )
+
+        # add one col to participant, to get deep restore
+        tableColsSQL = copy.deepcopy( self.tableColsSQL )
+        tableColsSQL['participant'].append( '"NewCol" VARCHAR(45)' )
+        upater = SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
+        upater.update()
+
+#        upater = SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(self.tableColsSQL))
+#        upater.update()
 
     # Test evaluateRestoreStrategy Case 4: added and removed are not equal and both > 0 -> Error
     # @unittest.skip("skipped temporarily")
@@ -332,7 +357,7 @@ class TestSQLiteUpdater(unittest.TestCase):
         tableColsSQL['participant'][1] = '"NewName" VARCHAR(45)'
         # add participant col -> 1 added ( in sum 2 added 1 removed)
         tableColsSQL['participant'].append( '"NewColumn" VARCHAR(45)' )
-        upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
+        upater = SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
         exceptionText = ''
         try:
             upater.update()
@@ -345,7 +370,7 @@ class TestSQLiteUpdater(unittest.TestCase):
     def test_fixIndexStatementsInSql(self):
         creationSQL = self.getDbCreationSQL(self.tableColsSQL)
 
-        upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, creationSQL)
+        upater = SQLiteDbUpdater(self.dbOrigPath, creationSQL)
         upater.update()
         res = self.executeSqlLine(self.dbOrigFileName, "PRAGMA index_list(participant);")
         self.assertEqual( res[0][1], 'participant_course_id_idx', "No dots are allowed in index-names" )
@@ -353,7 +378,7 @@ class TestSQLiteUpdater(unittest.TestCase):
         sql = '\nCREATE INDEX "W"."W.fk_W_W1_idx" ON "W" ("W_idW");\n'\
               'CREATE INDEX "WA"."W.fk_W_S1_idx" ON "W" ("S_idS");\n'
 
-        updater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(self.tableColsSQL))
+        updater = SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(self.tableColsSQL))
         res = re.findall( '\\.', sql )
         self.assertEqual( len(res), 4, "No dots are allowed in index-names" )
 
@@ -365,7 +390,7 @@ class TestSQLiteUpdater(unittest.TestCase):
     # @unittest.skip("skipped temporarily")
     def test_CheckNames(self):
         # should work without errors
-        upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(self.tableColsSQL))
+        upater = SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(self.tableColsSQL))
         upater.update()
 
         # test wrong tablename
@@ -376,7 +401,7 @@ class TestSQLiteUpdater(unittest.TestCase):
             '"name" VARCHAR(45)'
         ]
         
-        upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
+        upater = SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
         with self.assertRaises( ImportError ):
             upater.update()
 
@@ -388,7 +413,7 @@ class TestSQLiteUpdater(unittest.TestCase):
             '"wrong$name" VARCHAR(45)'
         ]
         
-        upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
+        upater = SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
         exceptionText = ''
         try:
             upater.update()
@@ -409,7 +434,7 @@ class TestSQLiteUpdater(unittest.TestCase):
         self.addTableData( self.dbOrigFileName, 'participant', moreParticipantOrigData )
 
         # update with no changes in tabledefinition
-        updater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(self.tableColsSQL))
+        updater = SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(self.tableColsSQL))
         updater.update()
 
         self.assertEqual( self.getTableData( self.dbOrigFileName, "participant" ), 
@@ -420,13 +445,13 @@ class TestSQLiteUpdater(unittest.TestCase):
     def test_RestoreViews(self):
         self.addSomeData(self.dbOrigFileName)
 
-        self.assertEqual( len( SQLiteDbUpdater.SQLiteDbUpdater.getDbViewNames(self.dbOrigFileName)), 2,
+        self.assertEqual( len( SQLiteDbUpdater.getDbViewNames(self.dbOrigFileName)), 2,
                           'Database "%s" should contain two views!' % self.dbOrigFileName )
          
-        updater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(self.tableColsSQL))
+        updater = SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(self.tableColsSQL))
         updater.update()
 
-        self.assertEqual( len( SQLiteDbUpdater.SQLiteDbUpdater.getDbViewNames(self.dbOrigFileName)), 2,
+        self.assertEqual( len( SQLiteDbUpdater.getDbViewNames(self.dbOrigFileName)), 2,
                           'Updated database "%s" should contain two views!' % self.dbOrigFileName )
 
     # Test restoring of views with error
@@ -434,7 +459,7 @@ class TestSQLiteUpdater(unittest.TestCase):
     def test_RestoreViewsWithError(self):
         self.addSomeData(self.dbOrigFileName)
 
-        self.assertEqual( len( SQLiteDbUpdater.SQLiteDbUpdater.getDbViewNames(self.dbOrigFileName)), 2,
+        self.assertEqual( len( SQLiteDbUpdater.getDbViewNames(self.dbOrigFileName)), 2,
                           'Database "%s" should contain two views!' % self.dbOrigFileName )
         
         createViewSql = 'CREATE VIEW tln_course_err as\n'\
@@ -455,7 +480,7 @@ class TestSQLiteUpdater(unittest.TestCase):
         expectedText = 'Exception on restore views: near "CREATE": syntax error'
         exceptionText = ''
         try:
-            updater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(self.tableColsSQL))
+            updater = SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(self.tableColsSQL))
             updater.update()
         except Exception as e:
             exceptionText = str(e)
@@ -473,13 +498,13 @@ class TestSQLiteUpdater(unittest.TestCase):
         repl = r'"%s"' % replacement
         sql = re.sub( pattern, repl, sql )
 
-        upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, sql )
+        upater = SQLiteDbUpdater(self.dbOrigPath, sql )
         upater.update()
 
-        self.assertEqual( len( SQLiteDbUpdater.SQLiteDbUpdater.getDbViewNames(self.dbOrigFileName)), 2,
+        self.assertEqual( len( SQLiteDbUpdater.getDbViewNames(self.dbOrigFileName)), 2,
                           'Updated database "%s" should contain two views!' % self.dbOrigFileName )
 
-        dbTableInfo = SQLiteDbUpdater.SQLiteDbUpdater.getDbTableInfo(self.dbOrigFileName)
+        dbTableInfo = SQLiteDbUpdater.getDbTableInfo(self.dbOrigFileName)
 
         self.assertTrue( ( replacement in dbTableInfo.keys() ),
                           'Table with changed name should exist in database %s!' % self.dbOrigFileName )
@@ -501,7 +526,7 @@ class TestSQLiteUpdater(unittest.TestCase):
         repl = r'"%s"' % replacement
         sql = re.sub( pattern, repl, sql )
 
-        upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, sql )
+        upater = SQLiteDbUpdater(self.dbOrigPath, sql )
         upater.enableLogging()
 
         exceptionString = ''
@@ -523,11 +548,11 @@ class TestSQLiteUpdater(unittest.TestCase):
         tableColsSQL['course'].append( '"refund" DECIMAL(4,2)' )
         tableColsSQL['course'].append( '"cost1" DECIMAL' )
         tableColsSQL['course'].append( '"cost2" DECIMAL' )
-        updater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
+        updater = SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
         updater.logger = self.logger
         updater.update()
 
-        dbTableInfo = SQLiteDbUpdater.SQLiteDbUpdater.getDbTableInfo(self.dbOrigFileName)
+        dbTableInfo = SQLiteDbUpdater.getDbTableInfo(self.dbOrigFileName)
         tableInfoCourse = dbTableInfo['course']
 
         type = tableInfoCourse.colInfoByName['cost1'].type
@@ -544,7 +569,7 @@ class TestSQLiteUpdater(unittest.TestCase):
     def test_DenyMoreThanOneSchema(self):
         sql = self.getDbCreationSQL(self.tableColsSQL)
         sql += 'ATTACH "another_test" AS "test";\n'
-        upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, sql)
+        upater = SQLiteDbUpdater(self.dbOrigPath, sql)
         exceptionText = ''
         try:
             upater.update()
@@ -561,11 +586,11 @@ class TestSQLiteUpdater(unittest.TestCase):
         # add cols to participant, with a sql keyword
         tableColsSQL = copy.deepcopy(self.tableColsSQL)
         tableColsSQL['course'].append( '"Alter" INT' )
-        upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
+        upater = SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
         upater.update()
 
         tableColsSQL['course'].append( '"NewCol" INT' )
-        upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
+        upater = SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
         try:
             upater.update()
         except sqlite3.OperationalError as e:
@@ -580,7 +605,7 @@ class TestSQLiteUpdater(unittest.TestCase):
         # add new cols
         tableColsSQL = copy.deepcopy(self.tableColsSQL)
         tableColsSQL['course'].append( '"Col/WithSlash" INT' )
-        upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
+        upater = SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
         exceptionText = ''
         try:
             upater.update()
@@ -592,7 +617,7 @@ class TestSQLiteUpdater(unittest.TestCase):
         # add new cols
         tableColsSQL = copy.deepcopy(self.tableColsSQL)
         tableColsSQL['course'].append( '"Col.WithDot" INT' )
-        upater = SQLiteDbUpdater.SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
+        upater = SQLiteDbUpdater(self.dbOrigPath, self.getDbCreationSQL(tableColsSQL))
         try:
             upater.update()
         except ImportError as e:
@@ -611,7 +636,7 @@ class TestSQLiteUpdater(unittest.TestCase):
         origDbName = os.path.join( self.filePath, "PrivateTestData/test.sqlite")
         tmpDbName = os.path.join( self.filePath, "PrivateTestData/testTmp.sqlite")
         shutil.copyfile( origDbName, tmpDbName  )
-        updater = SQLiteDbUpdater.SQLiteDbUpdater( tmpDbName, sql)
+        updater = SQLiteDbUpdater( tmpDbName, sql)
         self.logMsgs.clear()
         updater.logger = self.logger
         updater.update()
