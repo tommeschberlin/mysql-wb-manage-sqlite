@@ -1,0 +1,3 @@
+{
+    "python.analysis.extraPaths": [ "./library", "./library/lib", "./F2IT-WebUI/libhtwwebui"],
+}

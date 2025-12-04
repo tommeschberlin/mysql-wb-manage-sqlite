@@ -5,6 +5,16 @@
 7: 2024-08-01 Overwrite Message -> Update Message
 
 10: 2024-08-19 If some warnings in log, show a rollback button or some dialog to track attention
+
+11: 2025-12-04 use sqlglot to translate from mysql dialect to sqlite dialect<br>
+Example:
+````
+  import sqlglot
+
+  source_sql = "SELECT `name` FROM `users` WHERE `age` > 18 LIMIT 10"
+
+  converted = sqlglot.transpile(source_sql, read="mysql", write="sqlite")[0]
+````
   
 ________________________________________________________________________________
 
