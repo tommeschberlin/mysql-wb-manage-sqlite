@@ -286,15 +286,15 @@ class SQLiteDbUpdater:
                         for oldTableName,newTableName in renamingTableNames.items():
                             pattern = r'FROM +%s +' % oldTableName
                             repl = r'FROM %s ' % newTableName
-                            viewSql = re.sub( pattern, repl, viewSql, 0, re.IGNORECASE )
+                            viewSql = re.sub( pattern, repl, viewSql, flags = re.IGNORECASE )
 
                             pattern = r'JOIN +%s +' % oldTableName
                             repl = r'JOIN %s ' % newTableName
-                            viewSql = re.sub( pattern, repl, viewSql, 0, re.IGNORECASE )
+                            viewSql = re.sub( pattern, repl, viewSql, flags = re.IGNORECASE )
 
                             pattern = r'([ \(")])%s\.' % oldTableName
                             repl = r'\1%s.' % newTableName
-                            viewSql = re.sub( pattern, repl, viewSql, 0, re.IGNORECASE )
+                            viewSql = re.sub( pattern, repl, viewSql, flags = re.IGNORECASE )
 
                     # treatment of renamed table cols
                     if len(renamingTableCols):
@@ -302,7 +302,7 @@ class SQLiteDbUpdater:
                             for oldColName,newColName in colRenaming.items():
                                 pattern = r' +%s\.%s +' % (tableName, oldColName)
                                 repl = r' %s.%s ' % (tableName, newColName)
-                                viewSql = re.sub( pattern, repl, viewSql, 0, re.IGNORECASE )
+                                viewSql = re.sub( pattern, repl, viewSql, flags = re.IGNORECASE )
                     
                     # treatment of viewnames with ' '
                     if ' ' in viewName:
