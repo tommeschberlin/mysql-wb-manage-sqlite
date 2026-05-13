@@ -280,10 +280,10 @@ class SQLiteDbUpdater:
                 cur.execute( "select name, sql from sqlite_master where type='view'" )
                 views = cur.fetchall()
                 for viewName,viewSql in views:
-                    wrongChar = self.hasWrongCharacter( viewName )
-                    if len(wrongChar) :
-                        raise ExportSQLiteError( 'Error', f'View "{viewName}" contains not allowed character '\
-                                                  f'"{wrongChar}"! Allowed are: "{self.allowedCharacters}"' )
+                    #wrongChar = self.hasWrongCharacter( viewName )
+                    #if len(wrongChar) :
+                    #    raise ExportSQLiteError( 'Error', f'View "{viewName}" contains not allowed character '\
+                    #                              f'"{wrongChar}"! Allowed are: "{self.allowedCharacters}"' )
 
                     # treatment of renamed tables
                     if len(renamingTableNames):
@@ -308,7 +308,7 @@ class SQLiteDbUpdater:
                                 repl = r' %s.%s ' % (tableName, newColName)
                                 viewSql = re.sub( pattern, repl, viewSql, flags = re.IGNORECASE )
                     
-                    # treatment of viewnames with ' '
+                    # treatment of viewnames with leading/trailing ' '
                     if ' ' in viewName:
                         pattern = f' +{viewName} +'
                         repl = f' [{viewName}] '
