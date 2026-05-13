@@ -1,4 +1,5 @@
 import os, re, sqlite3, logging, copy
+from pathlib import Path
 
 if not 'ExportSQLiteError' in dir():
     ExportSQLiteError = ImportError
@@ -68,11 +69,14 @@ class SQLiteDbUpdater:
         self.logger = None
         self.dbFileName = os.path.basename(self.dbPath)
         self.dbName = os.path.splitext(self.dbFileName)[0]
+        self.dbTmpDirPath = os.path.join(os.path.dirname( dbPath ), self.dbName + "~")
+        Path(self.dbTmpDirPath).mkdir(parents=True, exist_ok=True)
         self.dbTmpFileName = self.dbFileName + "~"
-        self.dbRestoreDataFileName = self.dbName + "_restore.sql"
-        self.dbRestoreViewsFileName = self.dbName + "_restoreViews.sql"
-        self.dbOrigDefinitionFileName =  self.dbName + "_orig_definition.sql"
-        self.dbDefinitionFileName =  self.dbName + "_definition.sql"
+        self.dbTmpFilePath = os.path.join( self.dbTmpDirPath, self.dbTmpFileName )
+        self.dbRestoreDataFilePath = os.path.join( self.dbTmpDirPath, self.dbName + "_restore.sql" )
+        self.dbRestoreViewsFilePath = os.path.join( self.dbTmpDirPath, self.dbName + "_restoreViews.sql" )
+        self.dbOrigDefinitionFilePath = os.path.join( self.dbTmpDirPath, self.dbName + "_orig_definition.sql" )
+        self.dbAdaptedDefinitionFilePath = os.path.join( self.dbTmpDirPath, self.dbName + "_adapted_definition.sql" )
         self.confirmRequestCallback = None
         self.workDir = os.path.dirname( dbPath )
         self.logFile = os.path.join( self.workDir, self.dbName + ".log" )
@@ -574,8 +578,8 @@ class SQLiteDbUpdater:
         self.log('Update started')
         os.chdir( self.workDir )
 
-        self.log(f'Store original db definition sql file "{self.dbOrigDefinitionFileName}"' )
-        SQLiteDbUpdater.storeSql( self.createDbSql, self.dbOrigDefinitionFileName)
+        self.log(f'Store original db definition sql file "{self.dbOrigDefinitionFilePath}"' )
+        SQLiteDbUpdater.storeSql( self.createDbSql, self.dbOrigDefinitionFilePath)
 
         self.log('Substitute db name in sql')
         sql = self.substituteDbNameInSql( self.createDbSql )
@@ -586,16 +590,17 @@ class SQLiteDbUpdater:
         self.log('Change DECIMAL to NUMERIC statements in sql')
         sql = self.changeDecimalToNumericInSql( sql )
 
-        self.log(f'Store db updated/adapted creation sql file "{self.dbDefinitionFileName}"' )
-        SQLiteDbUpdater.storeSql( sql, self.dbDefinitionFileName)
+        self.log(f'Store db updated/adapted creation sql file "{self.dbAdaptedDefinitionFilePath}"' )
+        SQLiteDbUpdater.storeSql( sql, self.dbAdaptedDefinitionFilePath)
 
-        # create db in dbTmpFileName
-        self.log(f'Create db in temporary file "{self.dbTmpFileName}"' )
-        if os.path.isfile(self.dbTmpFileName):
-            os.remove( self.dbTmpFileName )
-        conn = sqlite3.connect(self.dbTmpFileName)
+        # create db in dbTmpFilePath
+        self.log(f'Create db in temporary file "{self.dbTmpFilePath}"' )
+        if os.path.isfile(self.dbTmpFilePath):
+            os.remove( self.dbTmpFilePath )
+        conn = sqlite3.connect(self.dbTmpFilePath)
         cur = None
         try:        
+            os.chdir( self.dbTmpDirPath )
             cur = conn.cursor()
             cur.executescript(sql)
             conn.commit()
@@ -603,12 +608,13 @@ class SQLiteDbUpdater:
             if cur:
                 cur.close()
             conn.close()
+            os.chdir( self.workDir )
 
         self.log( 'Retrieve new table/index/view/trigger info' )
-        newDbTableInfo = SQLiteDbUpdater.getDbTableInfo( self.dbTmpFileName )
-        newDbForeignIndexNames = SQLiteDbUpdater.getDbForeignIndexNames( self.dbTmpFileName )
-        newDbViewNames = SQLiteDbUpdater.getDbViewNames( self.dbTmpFileName )
-        newDbTriggerNames = SQLiteDbUpdater.getDbTriggerNames( self.dbTmpFileName )
+        newDbTableInfo = SQLiteDbUpdater.getDbTableInfo( self.dbTmpFilePath )
+        newDbForeignIndexNames = SQLiteDbUpdater.getDbForeignIndexNames( self.dbTmpFilePath )
+        newDbViewNames = SQLiteDbUpdater.getDbViewNames( self.dbTmpFilePath )
+        newDbTriggerNames = SQLiteDbUpdater.getDbTriggerNames( self.dbTmpFilePath )
 
         self.log( 'Check new table/index/view/trigger names' )
         self.checkNames( newDbTableInfo, newDbForeignIndexNames, newDbViewNames, newDbTriggerNames )
@@ -622,19 +628,19 @@ class SQLiteDbUpdater:
                 self.evaluateRestoreStrategy(oldDbTableInfo, newDbTableInfo)
             if SQLiteDbUpdater.containsData(oldDbTableInfo):
                 self.log(f'Backup and restore already existing db data for "{self.dbFileName}"')
-                self.log(f'Dump db data to "{self.dbRestoreDataFileName}"' )
-                self.dumpData(self.dbFileName, self.dbRestoreDataFileName, restoreStrategy)
-                self.log(f'Restore db data from: "{self.dbRestoreDataFileName}" to temporary db "{self.dbTmpFileName}"')
-                SQLiteDbUpdater.restoreData(self.dbTmpFileName, self.dbRestoreDataFileName)
+                self.log(f'Dump db data to "{self.dbRestoreDataFilePath}"' )
+                self.dumpData(self.dbFileName, self.dbRestoreDataFilePath, restoreStrategy)
+                self.log(f'Restore db data from: "{self.dbRestoreDataFilePath}" to temporary db "{self.dbTmpFilePath}"')
+                SQLiteDbUpdater.restoreData(self.dbTmpFilePath, self.dbRestoreDataFilePath)
 
             if SQLiteDbUpdater.containsViews(self.dbFileName):
-                self.dumpViews(self.dbFileName, self.dbRestoreViewsFileName, renamingTableNames, renamingTableCols )
-                self.restoreViews(self.dbTmpFileName, self.dbRestoreViewsFileName)
+                self.dumpViews(self.dbFileName, self.dbRestoreViewsFilePath, renamingTableNames, renamingTableCols )
+                self.restoreViews(self.dbTmpFilePath, self.dbRestoreViewsFilePath)
 
-        # on success replace dbFileName by dbTmpFileName
-        self.log(f'Move data from temporary db file "{self.dbTmpFileName}" to "{self.dbFileName}"')
+        # on success replace dbFileName by dbTmpFilePath
+        self.log(f'Move data from temporary db file "{self.dbTmpFilePath}" to "{self.dbFileName}"')
         if os.path.isfile(self.dbFileName):
             os.remove( self.dbFileName )
-        os.rename( self.dbTmpFileName, self.dbFileName  )
+        os.rename( self.dbTmpFilePath, self.dbFileName  )
 
         self.log('Update finished')
