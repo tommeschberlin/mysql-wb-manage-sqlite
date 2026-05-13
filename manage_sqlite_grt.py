@@ -33,6 +33,10 @@ from wb import DefineModule, wbinputs
 from workbench.ui import WizardForm, WizardPage
 from mforms import newButton, newCodeEditor, FileChooser, newLabel
 
+if 'SQLITE_LAST_SAVE_PATH' not in globals():
+    global SQLITE_LAST_SAVE_PATH
+    SQLITE_LAST_SAVE_PATH = None
+
 ModuleInfo = DefineModule(name='ExportSQLite',
                           author='Tatsushi Demachi',
                           version='0.1.0')
@@ -565,12 +569,21 @@ class ExportSQLiteWizard_PreviewPage(WizardPage):
 
         file_chooser = mforms.newFileChooser(self.main, mforms.SaveFile)
         file_chooser.set_extensions('SQLite DB Files (*.sqlite)|*.sqlite', 'sqlite')
-        file_chooser.set_path(modelName)
+
+        global SQLITE_LAST_SAVE_PATH
+        savePath = SQLITE_LAST_SAVE_PATH
+        if not savePath:
+            # if not savePath, use suggestion, to save near the modelfile
+            savePath = os.path.dirname( grt.root.wb.doc.owner.options.owner.docPath )
+
+        file_chooser.set_path(os.path.join(savePath, modelName))
 
         if file_chooser.run_modal() != mforms.ResultOk:
             return
         
         path = file_chooser.get_path()
+        SQLITE_LAST_SAVE_PATH = os.path.dirname( path )
+
         sql = self.sql_text.get_text(False)
                 
         logBuffer = StringIO()
