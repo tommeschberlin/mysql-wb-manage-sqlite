@@ -69,7 +69,7 @@ class SQLiteDbUpdater:
         self.logger = None
         self.dbFileName = os.path.basename(self.dbPath)
         self.dbName = os.path.splitext(self.dbFileName)[0]
-        self.dbTmpDirPath = os.path.join(os.path.dirname( dbPath ), self.dbName + "~")
+        self.dbTmpDirPath = os.path.join(os.path.dirname( dbPath ), "tmp_" + self.dbName + "_SQLiteExportWizard")
         Path(self.dbTmpDirPath).mkdir(parents=True, exist_ok=True)
         self.dbTmpFileName = self.dbFileName + "~"
         self.dbTmpFilePath = os.path.join( self.dbTmpDirPath, self.dbTmpFileName )
@@ -79,7 +79,7 @@ class SQLiteDbUpdater:
         self.dbAdaptedDefinitionFilePath = os.path.join( self.dbTmpDirPath, self.dbName + "_adapted_definition.sql" )
         self.confirmRequestCallback = None
         self.workDir = os.path.dirname( dbPath )
-        self.logFile = os.path.join( self.workDir, self.dbName + ".log" )
+        self.logFile = os.path.join( self.dbTmpDirPath, self.dbName + ".log" )
         self.dbTableInfo = {}
         self.allowedCharacters = 'a-zA-Z0-9+-_ÄäÖöÜüß'
 
