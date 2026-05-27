@@ -513,12 +513,11 @@ class ExportSQLiteDialog(mforms.Form):
         # --- Widgets ---
         self.sql_text = mforms.newCodeEditor()
         self.sql_text.set_language(mforms.LanguageMySQL)
+        self.sql_text.set_font("10pt Consolas")
         self.sql_text.set_text(sql_text)
 
-        self.log_text = mforms.newCodeEditor()
-        self.log_text.set_language(mforms.LanguageNone)
-        self.log_text.set_read_only(True)
-        self.log_text.set_text('(Bereit)')
+        self.log_text = mforms.newHyperText()
+        self.log_text.set_markup_text('(Bereit)')
 
         label_log = mforms.newLabel('Log output:')
         label_log.set_style(mforms.BoldStyle)
@@ -641,15 +640,27 @@ class ExportSQLiteDialog(mforms.Form):
             if logger:
                 logger.error('Error in "Create/Update SQLite database": %s' % errString)
 
+        #logger.error("errrr")
+        #logger.warn("warn")
+
         # Log-Ausgabe anzeigen
         logText = logBuffer.getvalue()
-        self.log_text.set_read_only(False)
-        if logText:
-            self.log_text.set_text(logText)
-        else:
-            self.log_text.set_text('(Keine Log-Ausgaben vom Updater)')
-        self.log_text.set_read_only(True)
-
         logBuffer.close()
         
+        if logText:
+            html = '<html><body style="font-family:Consolas;font-size:10pt;margin:0;padding:0;">'
+            for line in logText.splitlines():
+                escaped = line.replace('&','&amp;').replace('<','&lt;').replace('>','&gt;')
+                if ' ERROR ' in escaped or ' CRITICAL ' in escaped:
+                    html += '<div style="margin:0;padding:0;color:red;font-weight:bold">%s</div>' % escaped
+                elif ' WARNING ' in escaped:
+                    html += '<div style="margin:0;padding:0;color:orange;font-weight:bold">%s</div>' % escaped
+                else:
+                    html += '<div style="margin:0;padding:0">%s</div>' % escaped
+            html += '</body></html>'
+        else:
+            html = '<html><body style="font-family: Consolas; font-size: 10pt;">(Keine Log-Ausgaben vom Updater)</body></html>'
+        
+        self.log_text.set_markup_text(html)
+              
         os.chdir(currentDir)
