@@ -37,15 +37,14 @@ if 'SQLITE_LAST_SAVE_PATH' not in globals():
     global SQLITE_LAST_SAVE_PATH
     SQLITE_LAST_SAVE_PATH = None
 
-ModuleInfo = DefineModule(name='ExportSQLite',
-                          author='Tatsushi Demachi',
-                          version='0.1.0')
+ModuleInfo = DefineModule(name='ExportSQLite', author='Thomas Schwarze', version='0.9.0')
 
 @ModuleInfo.plugin('wb.util.exportSQLite',
                    caption='Manage SQLite',
                    input=[wbinputs.currentCatalog()],
                    groups=['Catalog/Utilities', 'Menu/Catalog'])
 @ModuleInfo.export(grt.INT, grt.classes.db_Catalog)
+
 def exportSQLite(cat):
     """Function to go through all schemata in catalog and rename all FKs
     of table-objects
