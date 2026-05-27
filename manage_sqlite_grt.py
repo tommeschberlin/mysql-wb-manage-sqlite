@@ -30,8 +30,6 @@ import mforms
 import SQLiteDbUpdater
 
 from wb import DefineModule, wbinputs
-from workbench.ui import WizardForm, WizardPage
-from mforms import newButton, newCodeEditor, FileChooser, newLabel
 
 if 'SQLITE_LAST_SAVE_PATH' not in globals():
     global SQLITE_LAST_SAVE_PATH
@@ -481,8 +479,12 @@ def exportSQLite(cat):
     sql_text = out.getvalue()
     out.close()
 
-    wizard = ExportSQLiteWizard(sql_text)
-    wizard.run()
+    dialog = ExportSQLiteDialog(sql_text)
+    
+    # run_modal
+    accept_btn = mforms.Button()
+    accept_btn.set_text('Close')
+    dialog.run_modal(accept_btn, mforms.Button())
 
     return 0
 
@@ -494,57 +496,86 @@ class ExportSQLiteError(Exception):
     def __str__(self):
         return repr(self.typ) + ': ' + repr(self.message)
 
-class ExportSQLiteWizard_PreviewPage(WizardPage):
-    def __init__(self, owner, sql_text):
-        WizardPage.__init__(self, owner, 'Review Generated Script')
+class ExportSQLiteDialog(mforms.Form):
+    """Modal dialog for reviewing and exporting SQLite SQL scripts.
 
-        self.save_button = mforms.newButton()
-        self.save_button.enable_internal_padding(True)
-        self.save_button.set_text('Save to File...')
-        self.save_button.set_tooltip('Save the text to a new file.')
-        self.save_button.add_clicked_callback(self.save_clicked)
+    Replaces the former WizardForm/WizardPage approach with a clean,
+    modal dialog using mforms.Form.
+    """
 
-        self.copy_button = mforms.newButton()
-        self.copy_button.enable_internal_padding(True)
-        self.copy_button.set_text('Copy to Clipboard')
-        self.copy_button.set_tooltip('Copy the text to the clipboard.')
-        self.copy_button.add_clicked_callback(self.copy_clicked)
+    def __init__(self, sql_text):
+        mforms.Form.__init__(self, None, True)
+        self.set_name('sqlite_export_dialog')
+        self.set_title('Manage SQLite Database')
+        self.set_size(900, 680)
+        self.center()
 
-        self.create_db_button = mforms.newButton()
-        self.create_db_button.enable_internal_padding(True)
-        self.create_db_button.set_text('Create/Update SQLite Database...')
-        self.create_db_button.set_tooltip('Create/Update SQLite Database from SQL statements.')
-        self.create_db_button.add_clicked_callback(self.create_db_clicked)
-
+        # --- Widgets ---
         self.sql_text = mforms.newCodeEditor()
         self.sql_text.set_language(mforms.LanguageMySQL)
         self.sql_text.set_text(sql_text)
 
         self.log_text = mforms.newCodeEditor()
-        self.log_text.set_language(mforms.LanguageJson)
-        
-        self.label_log = mforms.newLabel('Log output:')
-        self.label_log.set_style(mforms.BoldStyle)
+        self.log_text.set_language(mforms.LanguageNone)
+        self.log_text.set_read_only(True)
+        self.log_text.set_text('(Bereit)')
 
-    def go_cancel(self):
-        self.main.finish()
+        label_log = mforms.newLabel('Log output:')
+        label_log.set_style(mforms.BoldStyle)
 
-    def create_ui(self):
+        # --- Buttons ---
+        self.save_button = mforms.newButton()
+        self.save_button.set_text('Save to File...')
+        self.save_button.set_tooltip('Save the SQL script to a new file.')
+        self.save_button.add_clicked_callback(self.save_clicked)
+
+        self.copy_button = mforms.newButton()
+        self.copy_button.set_text('Copy to Clipboard')
+        self.copy_button.set_tooltip('Copy the SQL script to the clipboard.')
+        self.copy_button.add_clicked_callback(self.copy_clicked)
+
+        self.create_db_button = mforms.newButton()
+        self.create_db_button.set_text('Create/Update SQLite Database...')
+        self.create_db_button.set_tooltip('Create/Update SQLite Database from the generated SQL statements.')
+        self.create_db_button.add_clicked_callback(self.create_db_clicked)
+
+        close_button = mforms.newButton()
+        close_button.set_text('Close')
+        close_button.add_clicked_callback(self.close_clicked)
+
+        # --- Layout ---
+
+        # Top button bar (horizontal box)
         button_box = mforms.newBox(True)
-        button_box.set_padding(8)
-
+        button_box.set_spacing(8)
         button_box.add(self.save_button, False, True)
         button_box.add(self.copy_button, False, True)
         button_box.add(self.create_db_button, False, True)
+        button_box.add(close_button, False, True)
 
-        self.content.add(self.sql_text, True, True)
-        self.content.add(button_box, False, False)
+        # Log + label (vertical box)
+        log_box = mforms.newBox(False)
+        log_box.set_spacing(4)
+        log_box.add(label_log, False, True)
+        log_box.add(self.log_text, True, True)
 
-        self.content.add(self.label_log, False, False)
-        self.content.add_end(self.log_text, True, True)
+        # Main vertical layout
+        main_box = mforms.newBox(False)
+        main_box.set_spacing(8)
+        main_box.set_padding(12)
+        main_box.add(self.sql_text, True, True)
+        main_box.add(button_box, False, True)
+        main_box.add(log_box, True, True)
+
+        self.set_content(main_box)
+
+    # ---- Button callbacks ----
+
+    def close_clicked(self):
+        self.close()
 
     def save_clicked(self):
-        file_chooser = mforms.newFileChooser(self.main, mforms.SaveFile)
+        file_chooser = mforms.newFileChooser(self, mforms.SaveFile)
         file_chooser.set_extensions('SQL Files (*.sql)|*.sql', 'sql')
         if file_chooser.run_modal() == mforms.ResultOk:
             path = file_chooser.get_path()
@@ -556,17 +587,18 @@ class ExportSQLiteWizard_PreviewPage(WizardPage):
                 mforms.Utilities.show_error(
                     'Save to File',
                     'Could not save to file "%s": %s' % (path, str(e)),
-                    'OK','','')
+                    'OK', '', '')
 
     def copy_clicked(self):
         mforms.Utilities.set_clipboard_text(self.sql_text.get_text(False))
 
     def create_db_clicked(self):
         modelName = ''
-        for schema in [(s, s.name == 'main') for s in grt.root.wb.doc.physicalModels[0].catalog.schemata]:
+        for schema in [(s, s.name == 'main')
+                       for s in grt.root.wb.doc.physicalModels[0].catalog.schemata]:
             modelName = schema[0].name
 
-        file_chooser = mforms.newFileChooser(self.main, mforms.SaveFile)
+        file_chooser = mforms.newFileChooser(self, mforms.SaveFile)
         file_chooser.set_extensions('SQLite DB Files (*.sqlite)|*.sqlite', 'sqlite')
 
         global SQLITE_LAST_SAVE_PATH
@@ -581,45 +613,43 @@ class ExportSQLiteWizard_PreviewPage(WizardPage):
             return
         
         path = file_chooser.get_path()
-        SQLITE_LAST_SAVE_PATH = os.path.dirname( path )
+        SQLITE_LAST_SAVE_PATH = os.path.dirname(path)
 
         sql = self.sql_text.get_text(False)
-                
+        
+        # Log-Buffer: sammelt alle logging-Ausgaben
         logBuffer = StringIO()
         ch = logging.StreamHandler(logBuffer)
         ch.setLevel(logging.DEBUG)
-        formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s', '%H:%M:%S')
-        ch.setFormatter(formatter)
+        fmt = logging.Formatter('%(asctime)s %(levelname)s %(message)s', '%H:%M:%S')
+        ch.setFormatter(fmt)
         
         currentDir = os.getcwd()
         logger = None
         try:
-            updater = SQLiteDbUpdater.SQLiteDbUpdater( path, sql )
+            updater = SQLiteDbUpdater.SQLiteDbUpdater(path, sql)
             logger = updater.enableLogging()
             logger.addHandler(ch)
             updater.update()
         except Exception as e:
-            excType, value, traceback = sys.exc_info()
-            name = excType.__name__ if excType else 'Not retrievable databas name'
-            errString = 'Could not write to database "%s": %s %s (%s)' % (path, name, str(e), traceback)
-            mforms.Utilities.show_error( 'Create/Update SQLite database', errString, 'OK','','')
+            exc_type, exc_value, exc_tb = sys.exc_info()
+            err_name = exc_type.__name__ if exc_type else 'Unknown'
+            errString = 'Could not write to database "%s": %s %s' % (
+                path, err_name, str(e))
+            mforms.Utilities.show_error(
+                'Create/Update SQLite database', errString, 'OK', '', '')
             if logger:
-                logger.error( 'Error in "Create/Update SQLite database": %s' % errString )
+                logger.error('Error in "Create/Update SQLite database": %s' % errString)
 
-        self.log_text.set_text( logBuffer.getvalue() )
+        # Log-Ausgabe anzeigen
+        logText = logBuffer.getvalue()
+        self.log_text.set_read_only(False)
+        if logText:
+            self.log_text.set_text(logText)
+        else:
+            self.log_text.set_text('(Keine Log-Ausgaben vom Updater)')
+        self.log_text.set_read_only(True)
+
         logBuffer.close()
-        os.chdir( currentDir )
-
-class ExportSQLiteWizard(WizardForm):
-    def __init__(self, sql_text):
-        WizardForm.__init__(self, None)
-
-        self.set_name('sqlite_export_wizard')
-        self.set_title('SQLite Export Wizard')
-
-        self.preview_page = ExportSQLiteWizard_PreviewPage(self, sql_text)
-        self.add_page(self.preview_page)
-
-# Uncomment this, if you want to test/run/debug at MySQL Workbench -> Scripting
-# at least one model should exist
-# exportSQLite(grt.root.wb.doc.physicalModels[0].catalog)
+        
+        os.chdir(currentDir)
