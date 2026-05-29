@@ -673,5 +673,89 @@ class TestSQLiteUpdater(unittest.TestCase):
         self.assertEqual(updater.hasWrongCharacter('test.name', True), '.')
         self.assertEqual(updater.hasWrongCharacter('test$value', True), '$')
 
+    # Test checkMsAccessCompatibility
+    # @unittest.skip("skipped temporarily")
+    def test_checkMsAccessCompatibility(self):
+        from SQLiteDbUpdater import SQLiteDbUpdater
+
+        # Keine Probleme (nur INTEGER, VARCHAR<=255, NUMERIC)
+        sql_ok = """CREATE TABLE "test" (
+  "id" INTEGER PRIMARY KEY NOT NULL,
+  "name" VARCHAR(100),
+  "price" NUMERIC(10,2)
+);"""
+  
+        result = SQLiteDbUpdater.checkMsAccessCompatibility(sql_ok)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0][0], 'INFO')
+        self.assertIn('Keine Auffaelligkeiten', result[0][1])
+
+        # VARCHAR > 255
+        sql_long = """CREATE TABLE "test" (
+  "id" INTEGER,
+  "desc" VARCHAR(300)
+);"""
+        result = SQLiteDbUpdater.checkMsAccessCompatibility(sql_long)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0][0], 'INFO')
+        self.assertIn('VARCHAR(300) > 255', result[0][1])
+
+        # CLOB -> WARNING
+        sql_clob = """CREATE TABLE "test" (
+  "id" INTEGER,
+  "text" CLOB
+);"""
+        result = SQLiteDbUpdater.checkMsAccessCompatibility(sql_clob)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0][0], 'WARNING')
+        self.assertIn('CLOB', result[0][1])
+
+        # BLOB -> INFO
+        sql_blob = """CREATE TABLE "test" (
+  "id" INTEGER,
+  "data" BLOB
+);"""
+        result = SQLiteDbUpdater.checkMsAccessCompatibility(sql_blob)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0][0], 'INFO')
+        self.assertIn('BLOB', result[0][1])
+
+        # DATE / DATETIME / TIMESTAMP -> INFO
+        for typ in ['DATE', 'DATETIME', 'TIMESTAMP']:
+            sql_date = """CREATE TABLE "test" (
+  "id" INTEGER,
+  "created" %s
+);""" % typ
+            result = SQLiteDbUpdater.checkMsAccessCompatibility(sql_date)
+            self.assertEqual(len(result), 1)
+            self.assertEqual(result[0][0], 'INFO')
+            self.assertIn('Datum/Zeit', result[0][1])
+
+        # INTEGER -> keine Warnung
+        sql_int = """CREATE TABLE "test" (
+  "id" INTEGER
+);"""
+        result = SQLiteDbUpdater.checkMsAccessCompatibility(sql_int)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0][0], 'INFO')
+
+        # NUMERIC ohne Precision -> WARNING
+        sql_num = """CREATE TABLE "test" (
+  "betrag" NUMERIC
+);"""
+        result = SQLiteDbUpdater.checkMsAccessCompatibility(sql_num)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0][0], 'WARNING')
+        self.assertIn('NUMERIC ohne Precision/Scale', result[0][1])
+
+        # DECIMAL -> INFO (wird konvertiert)
+        sql_dec = """CREATE TABLE "test" (
+  "betrag" DECIMAL(10,2)
+);"""
+        result = SQLiteDbUpdater.checkMsAccessCompatibility(sql_dec)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0][0], 'INFO')
+        self.assertIn('DECIMAL', result[0][1])
+
 if __name__ == '__main__':
     unittest.main()

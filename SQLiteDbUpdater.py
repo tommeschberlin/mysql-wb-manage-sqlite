@@ -441,6 +441,56 @@ class SQLiteDbUpdater:
            cleanedRow.append(SQLiteDbUpdater.cleanSqlValue(val))
         return cleanedRow
     
+    @staticmethod
+    def checkMsAccessCompatibility(sql_text):
+        """Prueft SQL-Text auf MS Access-kompatible Typen.
+        Gibt eine Liste mit (level, message) zurueck (level: INFO, WARNING, ERROR).
+        """
+        warnings = []
+        
+        pattern = r'CREATE\s+TABLE\s+(?:"([^"]+)"\.)?"([^"]+)"\s*\((.*?)\);'
+        matches = re.findall(pattern, sql_text, re.IGNORECASE | re.DOTALL)
+        
+        for schema_name, table_name, columns_block in matches:
+            col_pattern = r'"([^"]+)"\s+([A-Za-z]+(?:\([^)]*\))?)'
+            for col_match in re.finditer(col_pattern, columns_block):
+                col_name = col_match.group(1)
+                col_type = col_match.group(2).strip()
+                col_type_upper = col_type.upper()
+                
+                if col_type_upper in ('CLOB', 'NCLOB'):
+                    warnings.append(('WARNING', 'Spalte "%s"."%s": Typ %s wird von MS Access nicht unterstuetzt' % (
+                        table_name, col_name, col_type)))
+                elif col_type_upper.startswith('VARCHAR') and '(' in col_type:
+                    try:
+                        length = int(re.search(r'\((\d+)\)', col_type).group(1))
+                        if length > 255:
+                            warnings.append(('INFO', 'Spalte "%s"."%s": VARCHAR(%d) > 255, MS Access zeigt nur 255 Zeichen an' % (
+                                table_name, col_name, length)))
+                    except:
+                        pass
+                elif col_type_upper == 'BLOB':
+                    warnings.append(('INFO', 'Spalte "%s"."%s": BLOB wird als OLE-Objekt in MS Access angezeigt' % (
+                        table_name, col_name)))
+                elif col_type_upper in ('DATE', 'DATETIME', 'TIMESTAMP'):
+                    warnings.append(('INFO', 'Spalte "%s"."%s": Typ %s wird als Datum/Zeit in MS Access angezeigt' % (
+                        table_name, col_name, col_type)))
+                elif col_type_upper == 'INTEGER':
+                    pass  # INTEGER ist in MS Access als Long Integer OK
+                elif col_type_upper.startswith('NUMERIC'):
+                    # NUMERIC ohne Precision/Scale?
+                    if col_type_upper == 'NUMERIC':
+                        warnings.append(('WARNING', 'Spalte "%s"."%s": NUMERIC ohne Precision/Scale, MS Access erwartet NUMERIC(p,s)' % (
+                            table_name, col_name)))
+                elif col_type_upper.startswith('DECIMAL'):
+                    warnings.append(('INFO', 'Spalte "%s"."%s": DECIMAL wird von SQLiteDbUpdater in NUMERIC konvertiert' % (
+                        table_name, col_name)))
+        
+        if not warnings:
+            warnings.append(('INFO', 'MS Access-Compatibility-Check: Keine Auffaelligkeiten gefunden'))
+        
+        return warnings
+    
     def findTableByFingerprint(self, tableInfo : TableInfo, newDbTableInfo : dict[str,TableInfo]) -> (str|None):
         colNames = list(tableInfo.colInfoByName.keys())
         for newTableName, newTableInfo in newDbTableInfo.items():

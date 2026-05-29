@@ -27,7 +27,7 @@ import logging
 
 import grt
 import mforms
-import SQLiteDbUpdater
+from SQLiteDbUpdater import SQLiteDbUpdater
 
 from wb import DefineModule, wbinputs
 
@@ -542,6 +542,9 @@ class ExportSQLiteDialog(mforms.Form):
         close_button.set_text('Close')
         close_button.add_clicked_callback(self.close_clicked)
 
+        self.access_check = mforms.newCheckBox()
+        self.access_check.set_text('Check MS Access compatibility')
+
         # --- Layout ---
 
         # Top button bar (horizontal box)
@@ -550,6 +553,7 @@ class ExportSQLiteDialog(mforms.Form):
         button_box.add(self.save_button, False, True)
         button_box.add(self.copy_button, False, True)
         button_box.add(self.create_db_button, False, True)
+        button_box.add(self.access_check, False, True)
         button_box.add(close_button, False, True)
 
         # Log + label (vertical box)
@@ -626,9 +630,21 @@ class ExportSQLiteDialog(mforms.Form):
         currentDir = os.getcwd()
         logger = None
         try:
-            updater = SQLiteDbUpdater.SQLiteDbUpdater(path, sql)
+            updater = SQLiteDbUpdater(path, sql)
             logger = updater.enableLogging()
             logger.addHandler(ch)
+
+            # MS Access Compatibility Check (hier logger verfuegbar)
+            if self.access_check.get_active():
+                access_warnings = SQLiteDbUpdater.checkMsAccessCompatibility(sql)
+                for level, msg in access_warnings:
+                    if level == 'WARNING':
+                        logger.warning(msg)
+                    elif level == 'ERROR':
+                        logger.error(msg)
+                    else:
+                        logger.info(msg)
+
             updater.update()
         except Exception as e:
             exc_type, exc_value, exc_tb = sys.exc_info()
@@ -639,9 +655,6 @@ class ExportSQLiteDialog(mforms.Form):
                 'Create/Update SQLite database', errString, 'OK', '', '')
             if logger:
                 logger.error('Error in "Create/Update SQLite database": %s' % errString)
-
-        #logger.error("errrr")
-        #logger.warn("warn")
 
         # Log-Ausgabe anzeigen
         logText = logBuffer.getvalue()
