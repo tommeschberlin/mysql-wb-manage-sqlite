@@ -645,6 +645,33 @@ class TestSQLiteUpdater(unittest.TestCase):
         self.assertEqual(self.logMsgs[1], 'Table "Gebuehr" fingerprint has been changed (col "Betrag": type: "NUMERIC(5,2)" <> "DECIMAL"), maybe data will be not restored correctly!')
         self.assertEqual(self.logMsgs[2], 'Type of column(s) "Betrag" has been changed, if restoring of data leads to problems, adapt data before change the datatype!')
 
+    # Test hasWrongCharacter ohne allowSpace
+    # @unittest.skip("skipped temporarily")
+    def test_hasWrongCharacter_without_space(self):
+        updater = SQLiteDbUpdater(self.dbOrigPath, '')
+
+        # Sollte OK sein
+        self.assertEqual(updater.hasWrongCharacter('Hallo'), '')
+        self.assertEqual(updater.hasWrongCharacter('test_123'), '')
+
+        # Sollte Fehler finden
+        self.assertEqual(updater.hasWrongCharacter('test test'), ' ')
+        self.assertEqual(updater.hasWrongCharacter('abc/def'), '/')
+        self.assertEqual(updater.hasWrongCharacter('abc.def'), '.')
+
+    # Test hasWrongCharacter mit allowSpace
+    # @unittest.skip("skipped temporarily")
+    def test_hasWrongCharacter_with_space(self):
+        updater = SQLiteDbUpdater(self.dbOrigPath, '')
+
+        # Sollte OK sein (allowSpace=True)
+        self.assertEqual(updater.hasWrongCharacter('Test Name', True), '')
+        self.assertEqual(updater.hasWrongCharacter('a b c_123', True), '')
+
+        # Sollte Fehler finden (auch mit allowSpace=True)
+        self.assertEqual(updater.hasWrongCharacter('test/name', True), '/')
+        self.assertEqual(updater.hasWrongCharacter('test.name', True), '.')
+        self.assertEqual(updater.hasWrongCharacter('test$value', True), '$')
 
 if __name__ == '__main__':
     unittest.main()
