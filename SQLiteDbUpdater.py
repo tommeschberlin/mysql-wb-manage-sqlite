@@ -69,7 +69,7 @@ class SQLiteDbUpdater:
         self.logger = None
         self.dbFileName = os.path.basename(self.dbPath)
         self.dbName = os.path.splitext(self.dbFileName)[0]
-        self.dbTmpDirPath = os.path.join(os.path.dirname( dbPath ), "tmp_" + self.dbName + "_SQLiteExportWizard")
+        self.dbTmpDirPath = os.path.join(os.path.dirname( dbPath ), "tmp_" + self.dbName + "_SQLiteExport")
         Path(self.dbTmpDirPath).mkdir(parents=True, exist_ok=True)
         self.dbTmpFileName = self.dbFileName + "~"
         self.dbTmpFilePath = os.path.join( self.dbTmpDirPath, self.dbTmpFileName )
