@@ -507,7 +507,7 @@ class ExportSQLiteDialog(mforms.Form):
         mforms.Form.__init__(self, None, True)
         self.set_name('sqlite_export_dialog')
         self.set_title('Manage SQLite Database')
-        self.set_size(900, 680)
+        self.set_min_size(900, 680)
         self.center()
 
         # --- Widgets ---
@@ -518,6 +518,7 @@ class ExportSQLiteDialog(mforms.Form):
 
         self.log_text = mforms.newHyperText()
         self.log_text.set_markup_text('(Bereit)')
+        self.log_text.set_font("10pt Consolas")
 
         label_log = mforms.newLabel('Log output:')
         label_log.set_style(mforms.BoldStyle)
@@ -562,15 +563,21 @@ class ExportSQLiteDialog(mforms.Form):
         log_box.add(label_log, False, True)
         log_box.add(self.log_text, True, True)
 
+        # Splitter zwischen SQL und Log (vertikal)
+        splitter = mforms.newSplitter(False)
+        splitter.add(self.sql_text, False, False)
+        splitter.add(log_box, True, True)
+
         # Main vertical layout
         main_box = mforms.newBox(False)
         main_box.set_spacing(8)
         main_box.set_padding(12)
-        main_box.add(self.sql_text, True, True)
         main_box.add(button_box, False, True)
-        main_box.add(log_box, True, True)
+        main_box.add(splitter, True, True)
 
         self.set_content(main_box)
+
+        splitter.set_divider_position(300)
 
     # ---- Button callbacks ----
 
